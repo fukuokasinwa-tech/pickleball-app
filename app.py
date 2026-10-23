@@ -1,7 +1,6 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import os
 
 # ページ基本設定
 st.set_page_config(
@@ -10,13 +9,12 @@ st.set_page_config(
     layout="centered"
 )
 
-# データベース初期化（自動作成）
+# データベース初期化
 DB_FILE = "pickleball.db"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    # 練習会テーブル
     c.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,13 +26,12 @@ def init_db():
             note TEXT
         )
     ''')
-    # 参加者テーブル
     c.execute('''
         CREATE TABLE IF NOT EXISTS participants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id INTEGER,
             date TEXT,
-            name TEXT,
+            nickname TEXT,
             comment TEXT
         )
     ''')
@@ -50,17 +47,23 @@ def get_events():
     conn.close()
     return df
 
-def get_participants():
+def get_participants_by_event(event_id):
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT nickname, comment FROM participants WHERE event_id = ? ORDER BY id ASC", conn, params=(event_id,))
+    conn.close()
+    return df
+
+def get_all_participants():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM participants ORDER BY id DESC", conn)
     conn.close()
     return df
 
-def add_participant(event_id, date, name, comment):
+def add_participant(event_id, date, nickname, comment):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("INSERT INTO participants (event_id, date, name, comment) VALUES (?, ?, ?, ?)",
-              (event_id, date, name, comment))
+    c.execute("INSERT INTO participants (event_id, date, nickname, comment) VALUES (?, ?, ?, ?)",
+              (event_id, date, nickname, comment))
     conn.commit()
     conn.close()
 
@@ -72,84 +75,127 @@ def add_event(date, time, title, location, capacity, note):
     conn.commit()
     conn.close()
 
-# デザイン設定
+# 背景をオレンジ基調にするカスタムCSS
 st.markdown("""
     <style>
-    .main-header { font-size: 2rem; color: #1E3A8A; text-align: center; font-weight: bold; margin-bottom: 1rem; }
-    .event-card { background-color: #F3F4F6; padding: 1.2rem; border-radius: 10px; border-left: 5px solid #2563EB; margin-bottom: 1rem; }
+    /* 全体背景（オレンジグラデーション） */
+    .stApp {
+        background: linear-gradient(135deg, #FF9900 0%, #FF5500 100%);
+        color: #333333;
+    }
+    
+    /* ヘッダータイトル */
+    .main-header {
+        font-size: 2.2rem;
+        color: #FFFFFF;
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 1.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    /* イベントカード（白ベースで読みやすく） */
+    .event-card {
+        background-color: #FFFFFF;
+        padding: 1.5rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        margin-bottom: 1.5rem;
+    }
+    
+    /* カード内のタイトル */
+    .event-title {
+        color: #E65100;
+        margin-top: 0;
+        font-size: 1.4rem;
+        border-bottom: 2px solid #FFE0B2;
+        padding-bottom: 0.3rem;
+    }
+
+    /* 参加者バッジ */
+    .participant-badge {
+        display: inline-block;
+        background-color: #FFF3E0;
+        color: #E65100;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        margin: 0.2rem;
+        font-weight: bold;
+        border: 1px solid #FFB74D;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="main-header">🏓 ピックルボール練習会 案内・集計</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🏓 ピックルボール練習会 案内・参加状況</div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["📅 練習日程・参加申込", "📊 参加集計一覧", "⚙️ 管理者画面"])
+tab1, tab2 = st.tabs(["📅 練習日程・参加申し込み", "⚙️ 管理者画面（日程追加）"])
 
-# タブ1: 練習日程・申込
+# タブ1: 練習日程・参加者表示・申込一体型画面
 with tab1:
-    st.subheader("📢 開催予定の練習会")
     df_events = get_events()
     
     if df_events.empty:
         st.info("現在予定されている練習会はありません。「管理者画面」タブから日程を追加してください。")
     else:
         for idx, row in df_events.iterrows():
-            with st.container():
-                st.markdown(f"""
-                <div class="event-card">
-                    <h3>{row['title']}</h3>
-                    <p><b>日時:</b> {row['date']} {row['time']}</p>
-                    <p><b>場所:</b> {row['location']}</p>
-                    <p><b>定員:</b> {row['capacity']} 名</p>
-                    <p><b>備考:</b> {row['note']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                with st.expander(f"👉 この練習会（{row['date']}）に申し込む"):
-                    with st.form(key=f"form_{row['id']}"):
-                        name = st.text_input("お名前 *")
-                        comment = st.text_input("コメント・連絡事項")
-                        submit = st.form_submit_button("参加を申し込む")
-                        
-                        if submit:
-                            if not name:
-                                st.warning("お名前を入力してください。")
-                            else:
-                                add_participant(row['id'], row['date'], name, comment)
-                                st.success(f"{name} 様の申し込みを受け付けました！")
-                                st.rerun()
+            event_id = row['id']
+            df_parts = get_participants_by_event(event_id)
+            current_count = len(df_parts)
+            capacity = row['capacity']
+            
+            # 各練習会の枠
+            st.markdown(f"""
+            <div class="event-card">
+                <h3 class="event-title">🏓 {row['title']}（{row['date']}）</h3>
+                <p><b>⏰ 時間:</b> {row['time']}</p>
+                <p><b>📍 場所:</b> {row['location']}</p>
+                <p><b>👥 参加人数:</b> {current_count} / {capacity} 名</p>
+                <p><b>📝 備考:</b> {row['note']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 参加者一覧のリアルタイム表示
+            st.write("▼ **現在の参加メンバー（ニックネーム）**")
+            if df_parts.empty:
+                st.caption("（まだ参加申込はありません。一番乗りで申し込みましょう！）")
+            else:
+                badges_html = ""
+                for _, p_row in df_parts.iterrows():
+                    comment_text = f" ({p_row['comment']})" if p_row['comment'] else ""
+                    badges_html += f'<span class="participant-badge">👤 {p_row["nickname"]}{comment_text}</span> '
+                st.markdown(badges_html, unsafe_allow_html=True)
+            
+            st.write("")
+            
+            # 参加申し込みフォーム
+            with st.expander(f"👉 この練習会（{row['date']}）に申込する"):
+                with st.form(key=f"form_{event_id}"):
+                    nickname = st.text_input("ニックネーム（表示名） *", placeholder="例: ピックル太郎")
+                    comment = st.text_input("一言コメント・連絡事項", placeholder="例: 初心者です！道具貸出希望")
+                    submit = st.form_submit_button("参加を申し込む！")
+                    
+                    if submit:
+                        if not nickname:
+                            st.warning("ニックネームを入力してください。")
+                        else:
+                            add_participant(event_id, row['date'], nickname, comment)
+                            st.success(f"「{nickname}」様 の参加を受け付けました！")
+                            st.rerun()
+            
+            st.divider()
 
-# タブ2: 参加集計一覧
+# タブ2: 管理者用（新しい日程の追加）
 with tab2:
-    st.subheader("👥 参加集計状況")
-    df_parts = get_participants()
-    
-    if df_parts.empty:
-        st.info("まだ参加申込はありません。")
-    else:
-        st.metric("現在の総参加申込数", f"{len(df_parts)} 名")
-        st.dataframe(df_parts[['date', 'name', 'comment']], use_container_width=True, hide_index=True)
-        
-        # CSVダウンロード機能（手動で保存・エクセル閲覧したい場合用）
-        csv = df_parts.to_csv(index=False).encode('utf-8_sig')
-        st.download_button(
-            label="📥 参加者一覧をCSVでダウンロード",
-            data=csv,
-            file_name="pickleball_participants.csv",
-            mime="text/csv"
-        )
-
-# タブ3: 日程追加（管理者用）
-with tab3:
     st.subheader("⚙️ 新しい練習会日程の追加")
     with st.form("add_event_form"):
         title = st.text_input("タイトル", value="ピックルボール練習会")
-        date = st.text_input("日付 (例: 2026/11/01)")
-        time = st.text_input("時間 (例: 10:00〜12:00)")
+        date = st.text_input("日付", placeholder="例: 11/15(土)")
+        time = st.text_input("時間", placeholder="例: 10:00〜12:00")
         location = st.text_input("場所", value="体育館")
         capacity = st.number_input("定員 (名)", value=16, step=1)
-        note = st.text_input("備考", value="ラケット貸出あり")
+        note = st.text_input("備考", value="ラケット貸出あり / 参加費500円")
         
-        submit_event = st.form_submit_button("日程を公開・追加する")
+        submit_event = st.form_submit_button("日程を追加・公開する")
         if submit_event:
             if not date:
                 st.warning("日付を入力してください。")
@@ -157,3 +203,16 @@ with tab3:
                 add_event(date, time, title, location, capacity, note)
                 st.success("新しい練習会日程を追加しました！")
                 st.rerun()
+
+    # CSV出力機能
+    st.write("---")
+    st.subheader("📊 参加者データ出力")
+    all_parts = get_all_participants()
+    if not all_parts.empty:
+        csv = all_parts.to_csv(index=False).encode('utf-8_sig')
+        st.download_button(
+            label="📥 全参加者リスト（CSV）をダウンロード",
+            data=csv,
+            file_name="pickleball_participants.csv",
+            mime="text/csv"
+        )
