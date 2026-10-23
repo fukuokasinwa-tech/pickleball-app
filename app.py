@@ -292,7 +292,7 @@ with tab2:
     if not st.session_state.get("is_admin"):
         pw = st.text_input("管理者パスワード", type="password")
         if st.button("ログイン"):
-            if pw == admin_password():1234
+            if pw ="1234"= admin_password():
                 st.session_state["is_admin"] = True
                 st.rerun()
             else:
