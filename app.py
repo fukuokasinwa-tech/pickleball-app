@@ -116,7 +116,14 @@ def _ensure_sheets(sh: gspread.Spreadsheet) -> None:
 
 
 def _ws(name: str) -> gspread.Worksheet:
-    return _spreadsheet().worksheet(name)
+    sh = _spreadsheet()
+    try:
+        return sh.worksheet(name)
+    except gspread.exceptions.WorksheetNotFound:
+        # 接続はキャッシュされるので、アプリ更新でシートが増えたときや、
+        # シートを消してしまったときはここで作り直す
+        _ensure_sheets(sh)
+        return sh.worksheet(name)
 
 
 def _to_row(rec: dict, name: str) -> list:
