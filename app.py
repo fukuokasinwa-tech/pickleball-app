@@ -437,8 +437,9 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 [class*="st-key-evbtn_"] button p { font-size: 1.12rem !important; font-weight: 900 !important; }
 [class*="st-key-evbtn_"] > div { flex: 1 1 0 !important; min-width: 0; }
 [class*="st-key-evbtn_"] button[kind="primary"] { background: var(--brand) !important; }
-[class*="st-key-absent_on_"] button { background: var(--ink) !important; color: #fff !important; }
+[class*="st-key-go_on_"] button { background: var(--ink) !important; color: var(--brand) !important; }
 [class*="st-key-evbtn_"] button:disabled { background: #e6e6e6 !important; color: #999 !important; box-shadow: none; }
+.ev-hint { color: var(--sub); font-size: .85rem; font-weight: 700; text-align: center; margin: 4px 0 22px; }
 .ev-spacer { height: 14px; }
 
 @media (max-width: 480px) {
@@ -667,28 +668,27 @@ def render_buttons(data: dict, ev: dict, person: dict | None, show_name: bool, f
     s = status_of(data, ev["id"], pid) if person else None
     if show_name:
         md(f'<div class="ev-who">👤 {esc(person["name"])}</div>')
-    with st.container(key=f"evbtn_{ev['id']}_{pid}", horizontal=True, gap="medium"):
+    # ボタンは1つだけ。押すたびに「参加」⇔「不参加」が切り替わる
+    with st.container(key=f"evbtn_{ev['id']}_{pid}"):
         if s == "attending":
-            go = st.button("✅ 参加予定", key=f"go_{ev['id']}_{pid}", type="primary", width="stretch")
+            go = st.button("✅ 参加予定", key=f"go_on_{ev['id']}_{pid}", width="stretch")
         else:
             go = st.button("満員です" if full else "🏓 参加する", key=f"go_{ev['id']}_{pid}",
                            type="primary", width="stretch", disabled=full)
-        no_key = f"absent_on_{ev['id']}_{pid}" if s == "absent" else f"absent_{ev['id']}_{pid}"
-        no = st.button("不参加", key=no_key, width="stretch")
-    if not (go or no):
+    if s == "attending":
+        md('<div class="ev-hint">もう一度押すと不参加になります</div>')
+    if not go:
         return
     if person is None:
         st.session_state["flash_warn"] = "まずは上の「お名前を登録」からログインしてください 🙏"
         st.rerun()
-    if go:
-        res = set_status(ev["id"], pid, "absent" if s == "attending" else "attending")
-        if res == "full":
-            st.session_state["flash_warn"] = "タッチの差で満員になりました…🙏"
-        else:
-            st.session_state["flash"] = ("取消しました。" if s == "attending"
-                                         else f"{person['name']} さんの参加を登録しました！🏓")
+    res = set_status(ev["id"], pid, "absent" if s == "attending" else "attending")
+    if res == "full":
+        st.session_state["flash_warn"] = "タッチの差で満員になりました…🙏"
+    elif s == "attending":
+        st.session_state["flash"] = f"{person['name']} さんを不参加にしました。"
     else:
-        set_status(ev["id"], pid, None if s == "absent" else "absent")
+        st.session_state["flash"] = f"{person['name']} さんの参加を登録しました！🏓"
     st.rerun()
 
 
