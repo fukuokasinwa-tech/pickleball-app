@@ -360,7 +360,6 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
 }
-.pk-level { font-size: 1.08rem; line-height: 1.7; }
 .st-key-howto { position: relative; padding: 20px 22px; }
 .st-key-howto_close { position: absolute !important; top: 8px; right: 10px; z-index: 2; width: auto !important; }
 .st-key-howto_close button { border: none !important; background: transparent !important; color: #999 !important; font-size: 1.3rem !important; }
@@ -408,7 +407,6 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
   border-radius: 7px; padding: 2px 10px; margin-left: 6px; }
 .ev-desc { color: #777; font-weight: 700; }
 .ev-body { padding: 18px 18px 10px; }
-.pk-level .next { display: inline-block; }
 .ev-count { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; font-weight: 900; }
 .ev-count .n { font-size: 2.7rem; line-height: 1; }
 .ev-count .of { font-size: 1.3rem; }
@@ -554,13 +552,6 @@ def render_login() -> None:
                     st.rerun()
                 else:
                     st.error("この名前はご家族として登録されています。登録した方のスマホから出欠を入れてください。")
-
-
-def render_level(data: dict, me: dict) -> None:
-    n = play_count(data, me["id"])
-    (_, cur, icon), nxt = level_of(n)
-    nxt_txt = f'<span class="next">あと{nxt[0] - n}回で {nxt[2]} {nxt[1]}！</span>' if nxt else '<span class="next">最高レベル到達！</span>'
-    md(f'<div class="pk-card pk-level">{icon} あなたは {esc(cur)}（参加{n}回）　{nxt_txt}</div>')
 
 
 def render_howto() -> None:
@@ -976,9 +967,7 @@ def main() -> None:
         st.toast(msg, icon="🎉")
     if msg := st.session_state.pop("flash_warn", None):
         st.toast(msg, icon="⚠️")
-    if me:
-        render_level(data, me)
-    else:
+    if not me:
         render_login()
     render_howto()
     render_news(data)
