@@ -36,7 +36,6 @@ def init_db():
         )
     ''')
     
-    # 既存DBに nickname カラムが無い場合の自動追加処理
     c.execute("PRAGMA table_info(participants)")
     columns = [column[1] for column in c.fetchall()]
     if "nickname" not in columns:
@@ -98,16 +97,13 @@ def delete_event(event_id):
     conn.commit()
     conn.close()
 
-# 背景を黄色基調にするカスタムCSS
+# デザイン設定（黄色グラデーション）
 st.markdown("""
     <style>
-    /* 全体背景（鮮やかなイエローグラデーション） */
     .stApp {
         background: linear-gradient(135deg, #FFEB3B 0%, #FBC02D 100%);
         color: #212121;
     }
-    
-    /* ヘッダータイトル */
     .main-header {
         font-size: 2.2rem;
         color: #3E2723;
@@ -116,8 +112,6 @@ st.markdown("""
         margin-bottom: 1.5rem;
         text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
     }
-    
-    /* イベントカード */
     .event-card {
         background-color: #FFFFFF;
         padding: 1.5rem;
@@ -126,8 +120,6 @@ st.markdown("""
         margin-bottom: 1.5rem;
         border-left: 8px solid #F57F17;
     }
-    
-    /* カード内のタイトル */
     .event-title {
         color: #F57F17;
         margin-top: 0;
@@ -135,8 +127,6 @@ st.markdown("""
         border-bottom: 2px solid #FFF59D;
         padding-bottom: 0.3rem;
     }
-
-    /* 参加者バッジ */
     .participant-badge {
         display: inline-block;
         background-color: #FFFDE7;
@@ -154,7 +144,7 @@ st.markdown('<div class="main-header">🏓 ピックルボール練習会 案内
 
 tab1, tab2 = st.tabs(["📅 練習日程・参加申し込み", "⚙️ 管理者画面（日程追加・削除）"])
 
-# タブ1: 練習日程・参加者表示・申込一体型画面
+# タブ1: 練習日程・参加申込
 with tab1:
     df_events = get_events()
     
@@ -167,7 +157,6 @@ with tab1:
             current_count = len(df_parts)
             capacity = row['capacity']
             
-            # 各練習会のカード表示
             st.markdown(f"""
             <div class="event-card">
                 <h3 class="event-title">🏓 {row['title']}（{row['date']}）</h3>
@@ -178,7 +167,6 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             
-            # 参加者一覧（ニックネーム表示）
             st.write("▼ **現在の参加メンバー（ニックネーム）**")
             if df_parts.empty:
                 st.caption("（まだ参加申込はありません。一番乗りで申し込みましょう！）")
@@ -192,7 +180,6 @@ with tab1:
             
             st.write("")
             
-            # 参加申し込みフォーム
             with st.expander(f"👉 この練習会（{row['date']}）に申込する"):
                 with st.form(key=f"form_{event_id}"):
                     nickname = st.text_input("ニックネーム（表示名） *", placeholder="例: ピックル太郎")
@@ -209,11 +196,29 @@ with tab1:
             
             st.divider()
 
-# タブ2: 管理者用（新しい日程の追加・消去）
+# タブ2: 管理者画面
 with tab2:
-    st.subheader("⚙️ 新しい練習会日程の追加")
+    # 1. 登録済み日程の削除（上部に配置してすぐ見えるように修正）
+    st.subheader("🗑️ 登録済み日程の削除")
+    df_events_del = get_events()
     
-    # 直近の入力値を自動取得（無ければ初期値）
+    if df_events_del.empty:
+        st.info("現在登録されている日程はありません。")
+    else:
+        for _, del_row in df_events_del.iterrows():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.write(f"<b>{del_row['date']}</b> - {del_row['title']} ({del_row['time']})", unsafe_allow_html=True)
+            with col2:
+                if st.button("🗑️ 削除", key=f"del_{del_row['id']}"):
+                    delete_event(del_row['id'])
+                    st.success(f"{del_row['date']} の日程を削除しました。")
+                    st.rerun()
+    
+    st.write("---")
+    
+    # 2. 新しい練習会日程の追加
+    st.subheader("⚙️ 新しい練習会日程の追加")
     latest = get_latest_event()
     default_title = latest[0] if latest else "ピックルボール練習会"
     default_location = latest[1] if latest else "体育館"
@@ -238,5 +243,15 @@ with tab2:
                 st.success("新しい練習会日程を追加しました！")
                 st.rerun()
 
-    # 日程削除機能
+    # 3. CSV出力機能
     st.write("---")
+    st.subheader("📊 参加者データ出力")
+    all_parts = get_all_participants()
+    if not all_parts.empty:
+        csv = all_parts.to_csv(index=False).encode('utf-8_sig')
+        st.download_button(
+            label="📥 全参加者リスト（CSV）をダウンロード",
+            data=csv,
+            file_name="pickleball_participants.csv",
+            mime="text/csv"
+        )
