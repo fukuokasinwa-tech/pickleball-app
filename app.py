@@ -35,6 +35,13 @@ def init_db():
             comment TEXT
         )
     ''')
+    
+    # 既存DBに nickname カラムが無い場合の自動追加処理
+    c.execute("PRAGMA table_info(participants)")
+    columns = [column[1] for column in c.fetchall()]
+    if "nickname" not in columns:
+        c.execute("ALTER TABLE participants ADD COLUMN nickname TEXT")
+        
     conn.commit()
     conn.close()
 
@@ -94,7 +101,7 @@ st.markdown("""
         text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
     }
     
-    /* イベントカード（白ベースで視認性を高く） */
+    /* イベントカード */
     .event-card {
         background-color: #FFFFFF;
         padding: 1.5rem;
@@ -162,8 +169,9 @@ with tab1:
             else:
                 badges_html = ""
                 for _, p_row in df_parts.iterrows():
-                    comment_text = f" ({p_row['comment']})" if p_row['comment'] else ""
-                    badges_html += f'<span class="participant-badge">👤 {p_row["nickname"]}{comment_text}</span> '
+                    nickname_val = p_row['nickname'] if pd.notna(p_row['nickname']) else "匿名"
+                    comment_text = f" ({p_row['comment']})" if pd.notna(p_row['comment']) and p_row['comment'] else ""
+                    badges_html += f'<span class="participant-badge">👤 {nickname_val}{comment_text}</span> '
                 st.markdown(badges_html, unsafe_allow_html=True)
             
             st.write("")
