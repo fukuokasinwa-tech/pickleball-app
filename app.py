@@ -9,10 +9,12 @@
 
 from __future__ import annotations
 
+import csv
 import html
+import io
 import os
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import gspread
 import streamlit as st
@@ -330,6 +332,24 @@ html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select
 .pb-cancel { color: #666; font-size: .95rem; }
 .pb-cancel s { margin-right: 12px; text-decoration-thickness: 2px; }
 
+/* ---- 日程一覧 ---- */
+.pb-list-card {
+  background: #fff; border: 3px solid #111; border-radius: 18px; padding: 14px 18px;
+  margin: 4px 0 8px; color: #111; box-shadow: 4px 4px 0 #ffd84d;
+}
+.pb-list-card.past { opacity: .55; box-shadow: none; }
+.pb-list-date { font-size: 1.35rem; font-weight: 800; }
+.pb-list-title {
+  display: inline-block; margin-left: 8px; font-size: .95rem; font-weight: 800;
+  background: #ffd84d; border: 2px solid #111; padding: 0 10px; border-radius: 999px; vertical-align: middle;
+}
+.pb-list-meta { color: #444; font-size: .92rem; margin-top: 4px; }
+.pb-list-stat { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-weight: 700; }
+.pb-list-stat .num { font-size: 1.3rem; font-weight: 800; }
+.pb-chip { border: 2px solid #111; border-radius: 999px; padding: 1px 10px; font-size: .85rem; font-weight: 800; background: #fff; }
+.pb-chip.red { background: #e53935; color: #fff; }
+.pb-chip.dark { background: #111; color: #fff; }
+
 .pb-section { font-size: 1.15rem; font-weight: 800; margin: 4px 0 10px; color: #111; }
 
 /* Streamlit ボタンを丸く */
@@ -338,6 +358,10 @@ html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select
 }
 .stButton > button[kind="primary"], .stFormSubmitButton > button[kind="primary"] {
   background: #e53935 !important; color: #fff !important;
+}
+
+.stButton > button:disabled {
+  background: #e6e6e6 !important; color: #888 !important; border-color: #bbb !important;
 }
 
 @media (max-width: 520px) {
@@ -440,6 +464,48 @@ def page_board(ev: dict) -> None:
     render_footer(ev)
 
 
+def page_list(events: list[dict]) -> None:
+    today = date.today().isoformat()
+    show_past = st.toggle("終了した日程も表示", value=False)
+    shown = [e for e in events if show_past or e["date"] >= today]
+    if not shown:
+        st.info("今後の日程はまだありません。")
+        return
+    st.markdown('<div class="pb-section">📅 練習会の日程</div>', unsafe_allow_html=True)
+    for e in shown:
+        n = len(attending(e))
+        cap = e["capacity"]
+        n_first = sum(p["first_time"] for p in attending(e))
+        past = e["date"] < today
+        if past:
+            status = '<span class="pb-chip dark">終了</span>'
+        elif cap and n >= cap:
+            status = '<span class="pb-chip red">満員</span>'
+        else:
+            status = f'<span class="pb-chip">残り {cap - n}席</span>' if cap else ""
+        first = f'<span class="pb-chip red">🔰 初参加 {n_first}人</span>' if n_first else ""
+        meta = "　".join(esc(v) for v in (e.get("time"), e.get("place"), e.get("fee")) if v)
+        st.markdown(
+            f"""<div class="pb-list-card{' past' if past else ''}">
+  <span class="pb-list-date">{esc(fmt_date(e['date']))}</span><span class="pb-list-title">{esc(e['title'])}</span>
+  <div class="pb-list-meta">{meta}</div>
+  <div class="pb-list-stat"><span><span class="num">{n}</span> / {cap}人</span>{status}{first}</div>
+</div>""",
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns(2)
+        if c1.button("参加状況を見る", key=f"view_{e['id']}", use_container_width=True):
+            st.session_state["_next_event"] = e["id"]
+            st.session_state["_next_page"] = "📋 参加状況"
+            st.rerun()
+        full = bool(past or (cap and n >= cap))
+        label = "終了しました" if past else "満員です" if full else "申し込む 🏓"
+        if c2.button(label, key=f"join_{e['id']}", type="primary", disabled=full, use_container_width=True):
+            st.session_state["_next_event"] = e["id"]
+            st.session_state["_next_page"] = "✍️ 申し込む"
+            st.rerun()
+
+
 def page_signup(ev: dict) -> None:
     render_event_card(ev)
     render_summary(ev)
@@ -492,7 +558,7 @@ def page_admin(data: dict, ev: dict | None) -> None:
                     st.error("パスワードが違います。")
         return
 
-    tab_p, tab_e, tab_new = st.tabs(["👥 参加者管理", "📝 日程の編集", "➕ 日程の作成"])
+    tab_p, tab_e, tab_new, tab_csv = st.tabs(["👥 参加者管理", "📝 日程の編集", "➕ 日程の作成", "📊 CSV出力"])
 
     with tab_p:
         if ev is None:
@@ -507,7 +573,10 @@ def page_admin(data: dict, ev: dict | None) -> None:
             admin_edit_event(ev)
 
     with tab_new:
-        admin_new_event()
+        admin_new_event(data)
+
+    with tab_csv:
+        admin_csv(data, ev)
 
     st.divider()
     if st.button("ログアウト"):
@@ -591,12 +660,49 @@ def admin_edit_event(ev: dict) -> None:
                 st.rerun()
 
 
-def admin_new_event() -> None:
-    values = _event_form("new")
+def admin_new_event(data: dict) -> None:
+    template = None
+    if data["events"]:
+        # 直近（日付が最も新しい）日程の内容を初期値にし、日付はその1週間後（過去なら今日以降の同じ曜日）
+        latest = max(data["events"], key=lambda e: e["date"])
+        d = date.fromisoformat(latest["date"]) + timedelta(days=7)
+        while d < date.today():
+            d += timedelta(days=7)
+        template = {**latest, "date": d.isoformat()}
+        st.caption(f"前回「{event_label(latest)}」の内容を初期値にしています。")
+    values = _event_form("new", template)
     if values:
         st.session_state["_next_event"] = create_event(values)
         st.session_state["flash"] = "日程を作成しました。"
         st.rerun()
+
+
+CSV_COLS = ["日付", "タイトル", "名前", "状態", "初参加", "流入元", "アイコン", "ひとこと", "申込日時"]
+
+
+def participants_csv(events: list[dict]) -> bytes:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(CSV_COLS)
+    for e in sorted(events, key=lambda e: e["date"]):
+        for p in e["participants"]:
+            w.writerow([e["date"], e["title"], p["name"],
+                        "参加" if p["status"] == "attending" else "不参加",
+                        "○" if p["first_time"] else "", p.get("source", ""), p.get("icon", ""),
+                        p.get("sub", ""), p.get("created_at", "")])
+    return buf.getvalue().encode("utf-8-sig")  # Excel で文字化けしないよう BOM 付き
+
+
+def admin_csv(data: dict, ev: dict | None) -> None:
+    st.caption("Excel でそのまま開ける形式（UTF-8 BOM付き）です。")
+    if ev is not None:
+        st.download_button(f"📥 この日程（{event_label(ev)}）の参加者", participants_csv([ev]),
+                           file_name=f"pickleball_{ev['date']}.csv", mime="text/csv", use_container_width=True)
+    if data["events"]:
+        st.download_button("📥 全日程の参加者", participants_csv(data["events"]),
+                           file_name="pickleball_participants_all.csv", mime="text/csv", use_container_width=True)
+    else:
+        st.info("日程がありません。")
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +734,7 @@ def main() -> None:
 
     with st.sidebar:
         st.markdown("## 🏓 ピックルボール練習会")
-        pages = ["📋 参加状況", "✍️ 申し込む", "🔧 管理"]
+        pages = ["📋 参加状況", "📅 日程一覧", "✍️ 申し込む", "🔧 管理"]
         page = st.radio("メニュー", pages, key="page", label_visibility="collapsed")
 
         ev = None
@@ -648,6 +754,8 @@ def main() -> None:
 
     if page == "🔧 管理":
         page_admin(data, ev)
+    elif page == "📅 日程一覧":
+        page_list(events)
     elif ev is None:
         st.info("公開中の日程はまだありません。")
     elif page == "✍️ 申し込む":
