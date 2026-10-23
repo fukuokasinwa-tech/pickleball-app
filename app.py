@@ -24,7 +24,7 @@ def admin_password():
     try:
         return st.secrets["1234"]
     except (KeyError, FileNotFoundError):
-        return os.environ.get("ADMIN_PASSWORD", "admin")
+        return os.environ.get("1234", "admin")
 
 
 def connect():
