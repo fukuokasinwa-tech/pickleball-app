@@ -1,6 +1,7 @@
 import streamlit as st
-import gspread
+import sqlite3
 import pandas as pd
+import os
 
 # ページ基本設定
 st.set_page_config(
@@ -9,110 +10,102 @@ st.set_page_config(
     layout="centered"
 )
 
-# カスタムCSS（デザインの調整）
+# データベース初期化（自動作成）
+DB_FILE = "pickleball.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    # 練習会テーブル
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT,
+            time TEXT,
+            title TEXT,
+            location TEXT,
+            capacity INTEGER,
+            note TEXT
+        )
+    ''')
+    # 参加者テーブル
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS participants (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER,
+            date TEXT,
+            name TEXT,
+            comment TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# DB操作関数
+def get_events():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM events ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+def get_participants():
+    conn = sqlite3.connect(DB_FILE)
+    df = pd.read_sql_query("SELECT * FROM participants ORDER BY id DESC", conn)
+    conn.close()
+    return df
+
+def add_participant(event_id, date, name, comment):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO participants (event_id, date, name, comment) VALUES (?, ?, ?, ?)",
+              (event_id, date, name, comment))
+    conn.commit()
+    conn.close()
+
+def add_event(date, time, title, location, capacity, note):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("INSERT INTO events (date, time, title, location, capacity, note) VALUES (?, ?, ?, ?, ?, ?)",
+              (date, time, title, location, capacity, note))
+    conn.commit()
+    conn.close()
+
+# デザイン設定
 st.markdown("""
     <style>
-    .main-header {
-        font-size: 2rem;
-        color: #1E3A8A;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 1rem;
-    }
-    .event-card {
-        background-color: #F3F4F6;
-        padding: 1.2rem;
-        border-radius: 10px;
-        border-left: 5px solid #2563EB;
-        margin-bottom: 1rem;
-    }
+    .main-header { font-size: 2rem; color: #1E3A8A; text-align: center; font-weight: bold; margin-bottom: 1rem; }
+    .event-card { background-color: #F3F4F6; padding: 1.2rem; border-radius: 10px; border-left: 5px solid #2563EB; margin-bottom: 1rem; }
     </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">🏓 ピックルボール練習会 案内・集計</div>', unsafe_allow_html=True)
 
-# --- 1. Google 認証 & 接続処理 (柔軟なフォールバック機能付き) ---
-@st.cache_resource(show_spinner=False)
-def get_gspread_client():
-    # Secretsからサービスアカウント情報を柔軟に取得
-    if "gcp_service_account" in st.secrets:
-        creds_dict = dict(st.secrets["gcp_service_account"])
-    else:
-        # トラブル回避のため直接キーが置かれている場合にも対応
-        creds_dict = dict(st.secrets)
-    
-    # private_key 内の \n 文字列を実際の改行コードに変換
-    if "private_key" in creds_dict:
-        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-        
-    return gspread.service_account_from_dict(creds_dict)
+tab1, tab2, tab3 = st.tabs(["📅 練習日程・参加申込", "📊 参加集計一覧", "⚙️ 管理者画面"])
 
-@st.cache_resource(show_spinner=False)
-def get_spreadsheet():
-    client = get_gspread_client()
-    # URLの取得箇所も柔軟に対応
-    url = None
-    if "gsheets" in st.secrets and "spreadsheet" in st.secrets["gsheets"]:
-        url = st.secrets["gsheets"]["spreadsheet"]
-    elif "spreadsheet" in st.secrets:
-        url = st.secrets["spreadsheet"]
-    elif "spreadsheet_url" in st.secrets:
-        url = st.secrets["spreadsheet_url"]
-        
-    if not url:
-        st.error("スプレッドシートのURLがSecrets設定に見つかりません。")
-        st.stop()
-        
-    return client.open_by_url(url)
-
-# --- 2. データ読み込み ---
-try:
-    sh = get_spreadsheet()
-    
-    # 各シートの取得（存在しない場合は初期表示用のダミーデータを作成）
-    try:
-        ws_events = sh.worksheet("events")
-        events_data = ws_events.get_all_records()
-    except Exception:
-        events_data = []
-
-    try:
-        ws_parts = sh.worksheet("participants")
-        parts_data = ws_parts.get_all_records()
-    except Exception:
-        parts_data = []
-
-except Exception as e:
-    st.error(f"スプレッドシートとの連携でエラーが発生しました: {e}")
-    st.stop()
-
-# --- 3. メイン画面レイアウト ---
-tab1, tab2 = st.tabs(["📅 練習日程・参加申込", "📊 参加集計一覧"])
-
-# タブ1: 練習日程告知と申し込み
+# タブ1: 練習日程・申込
 with tab1:
     st.subheader("📢 開催予定の練習会")
+    df_events = get_events()
     
-    if not events_data:
-        st.info("現在告知されている練習会日程はありません。スプレッドシートの `events` シートに日程を追加してください。")
+    if df_events.empty:
+        st.info("現在予定されている練習会はありません。「管理者画面」タブから日程を追加してください。")
     else:
-        df_events = pd.DataFrame(events_data)
-        
         for idx, row in df_events.iterrows():
             with st.container():
                 st.markdown(f"""
                 <div class="event-card">
-                    <h3>{row.get('title', 'ピックルボール練習会')}</h3>
-                    <p><b>日時:</b> {row.get('date', '未定')} {row.get('time', '')}</p>
-                    <p><b>場所:</b> {row.get('location', '未定')}</p>
-                    <p><b>定員:</b> {row.get('capacity', 'なし')} 名</p>
-                    <p><b>備考:</b> {row.get('note', '-')}</p>
+                    <h3>{row['title']}</h3>
+                    <p><b>日時:</b> {row['date']} {row['time']}</p>
+                    <p><b>場所:</b> {row['location']}</p>
+                    <p><b>定員:</b> {row['capacity']} 名</p>
+                    <p><b>備考:</b> {row['note']}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 申込フォーム
-                with st.expander(f"👉 この練習会（{row.get('date', '')}）に申し込む"):
-                    with st.form(key=f"form_{idx}"):
+                with st.expander(f"👉 この練習会（{row['date']}）に申し込む"):
+                    with st.form(key=f"form_{row['id']}"):
                         name = st.text_input("お名前 *")
                         comment = st.text_input("コメント・連絡事項")
                         submit = st.form_submit_button("参加を申し込む")
@@ -121,28 +114,46 @@ with tab1:
                             if not name:
                                 st.warning("お名前を入力してください。")
                             else:
-                                try:
-                                    ws_parts = sh.worksheet("participants")
-                                    ws_parts.append_row([row.get('id', idx), row.get('date', ''), name, comment])
-                                    st.success(f"{name} 様の申し込みを受け付けました！")
-                                    st.rerun()
-                                except Exception as err:
-                                    st.error(f"送信に失敗しました: {err}")
+                                add_participant(row['id'], row['date'], name, comment)
+                                st.success(f"{name} 様の申し込みを受け付けました！")
+                                st.rerun()
 
 # タブ2: 参加集計一覧
 with tab2:
     st.subheader("👥 参加集計状況")
+    df_parts = get_participants()
     
-    if not parts_data:
+    if df_parts.empty:
         st.info("まだ参加申込はありません。")
     else:
-        df_parts = pd.DataFrame(parts_data)
+        st.metric("現在の総参加申込数", f"{len(df_parts)} 名")
+        st.dataframe(df_parts[['date', 'name', 'comment']], use_container_width=True, hide_index=True)
         
-        # 日程ごとに集計して見やすく表示
-        st.metric("現在の延べ参加申込数", f"{len(df_parts)} 名")
-        
-        st.dataframe(
-            df_parts,
-            use_container_width=True,
-            hide_index=True
+        # CSVダウンロード機能（手動で保存・エクセル閲覧したい場合用）
+        csv = df_parts.to_csv(index=False).encode('utf-8_sig')
+        st.download_button(
+            label="📥 参加者一覧をCSVでダウンロード",
+            data=csv,
+            file_name="pickleball_participants.csv",
+            mime="text/csv"
         )
+
+# タブ3: 日程追加（管理者用）
+with tab3:
+    st.subheader("⚙️ 新しい練習会日程の追加")
+    with st.form("add_event_form"):
+        title = st.text_input("タイトル", value="ピックルボール練習会")
+        date = st.text_input("日付 (例: 2026/11/01)")
+        time = st.text_input("時間 (例: 10:00〜12:00)")
+        location = st.text_input("場所", value="体育館")
+        capacity = st.number_input("定員 (名)", value=16, step=1)
+        note = st.text_input("備考", value="ラケット貸出あり")
+        
+        submit_event = st.form_submit_button("日程を公開・追加する")
+        if submit_event:
+            if not date:
+                st.warning("日付を入力してください。")
+            else:
+                add_event(date, time, title, location, capacity, note)
+                st.success("新しい練習会日程を追加しました！")
+                st.rerun()
