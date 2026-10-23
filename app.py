@@ -505,6 +505,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 [class*="st-key-evbtn_"] button:disabled { background: #e6e6e6 !important; color: #999 !important; box-shadow: none; }
 .ev-hint { color: var(--sub); font-size: .85rem; font-weight: 700; text-align: center; margin: 4px 0 22px; }
 .ev-spacer { height: 14px; }
+.st-key-login_js, div:has(> .st-key-login_js) { display: none !important; }
 
 /* ---- 管理者メニューのタブ：スマホでも全部見えるよう折り返して並べる ---- */
 .stTabs [role="tablist"] { flex-wrap: wrap; gap: 6px 8px; overflow: visible !important; padding-bottom: 6px; }
@@ -549,26 +550,79 @@ def md(s: str) -> None:
     st.markdown(s, unsafe_allow_html=True)
 
 
+LOGIN_COOKIE = "yamepick_me"  # ブラウザに保存するログイン情報（ID.トークン）
+
+
+def login_value(m: dict) -> str:
+    return f"{m['id']}.{login_token(m)}"
+
+
+def member_from_login(data: dict, value: str | None) -> dict | None:
+    if not value or "." not in value:
+        return None
+    mid, tok = value.split(".", 1)
+    m = find(data["members"], mid)
+    return m if m and not m["family_of"] and tok == login_token(m) else None
+
+
 def current_member(data: dict) -> dict | None:
-    """セッション、なければURLの ?me=ID.トークン からログイン状態を復元する。"""
-    mid = st.session_state.get("me")
-    if not mid and (q := st.query_params.get("me")) and "." in q:
-        qid, tok = q.split(".", 1)
-        m = find(data["members"], qid)
-        if m and not m["family_of"] and tok == login_token(m):
-            st.session_state["me"] = mid = qid
-    return find(data["members"], mid) if mid else None
+    """セッション → URLの ?me=（以前のブックマーク用）→ ブラウザに保存したログイン情報 の順で復元する。"""
+    if mid := st.session_state.get("me"):
+        return find(data["members"], mid)
+    if q := st.query_params.get("me"):
+        st.query_params.pop("me", None)  # 他の人に貼られないようURLからは消す
+        if m := member_from_login(data, q):
+            sign_in(m)
+            return m
+    if m := member_from_login(data, st.context.cookies.get(LOGIN_COOKIE)):
+        st.session_state["me"] = m["id"]
+        return m
+    return None
 
 
 def sign_in(m: dict) -> None:
     st.session_state["me"] = m["id"]
-    # URLに残すので、ブックマーク・ホーム画面追加で次回から自動ログイン
-    st.query_params["me"] = f"{m['id']}.{login_token(m)}"
+    # 次回以降も名前を覚えておくよう、ブラウザに保存する（remember_login で書き込む）
+    st.session_state["_save_login"] = login_value(m)
 
 
 def sign_out() -> None:
     st.session_state.pop("me", None)
     st.query_params.pop("me", None)
+    st.session_state["_clear_login"] = True
+
+
+def remember_login(me: dict | None) -> None:
+    """ブラウザのクッキーと localStorage にログイン情報を保存・削除する。
+
+    クッキーはサーバー側（st.context.cookies）で読む。localStorage は予備で、
+    クッキーが届かなかったときは ?me= を付けて1回だけ開き直す。
+    """
+    cookie = f"{LOGIN_COOKIE}=' + v + '; path=/; max-age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '')"
+    if value := st.session_state.pop("_save_login", None):
+        js = f"""const v = {json.dumps(value)};
+document.cookie = '{cookie};
+try {{ localStorage.setItem('{LOGIN_COOKIE}', v); sessionStorage.removeItem('yp_tried'); }} catch (e) {{}}"""
+    elif st.session_state.pop("_clear_login", None):
+        js = f"""document.cookie = '{LOGIN_COOKIE}=; path=/; max-age=0';
+try {{ localStorage.removeItem('{LOGIN_COOKIE}'); }} catch (e) {{}}"""
+    elif me is None:
+        js = f"""try {{
+  const v = localStorage.getItem('{LOGIN_COOKIE}');
+  if (v && !sessionStorage.getItem('yp_tried')) {{
+    sessionStorage.setItem('yp_tried', '1');
+    // URLの ?me= で渡す（サーバーがすぐにURLから消す）。クッキーが届かない環境でも復元できる
+    const u = new URL(location.href);
+    u.searchParams.set('me', v);
+    location.replace(u.toString());
+  }} else if (v) {{
+    localStorage.removeItem('{LOGIN_COOKIE}');  // 無効になったログイン情報
+  }}
+}} catch (e) {{}}"""
+    else:
+        return
+    with st.container(key="login_js"):  # 画面には何も出さない（CSSで非表示）
+        st.html(f"<script>{js}</script>", unsafe_allow_javascript=True)
 
 
 def render_hero(data: dict, me: dict | None) -> None:
@@ -612,7 +666,7 @@ def render_hero(data: dict, me: dict | None) -> None:
 def render_login() -> None:
     with st.container(key="login"):
         md('<div class="pk-login-title">👋 お名前を登録</div>')
-        st.caption("2回目以降も、同じお名前を入れるとログインできます。")
+        st.caption("一度登録すると、このスマホ（ブラウザ）では次回から自動でログインします。別のスマホでは同じお名前を入れてください。")
         name = st.text_input("お名前（表示名）", max_chars=20, placeholder="例: のり")
         with st.expander("はじめての方はこちらも教えてください"):
             source = st.selectbox("YAME PICKを知ったきっかけ", ["（選択しない）"] + SOURCES)
@@ -1186,6 +1240,7 @@ def show_api_error(e: gspread.exceptions.APIError) -> None:
 
 def render_page(data: dict) -> None:
     me = current_member(data)
+    remember_login(me)
     render_hero(data, me)
     if msg := st.session_state.pop("flash", None):
         st.toast(msg, icon="🎉")
