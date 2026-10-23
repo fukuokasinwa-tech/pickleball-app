@@ -75,53 +75,54 @@ def add_event(date, time, title, location, capacity, note):
     conn.commit()
     conn.close()
 
-# 背景をオレンジ基調にするカスタムCSS
+# 背景を黄色基調にするカスタムCSS
 st.markdown("""
     <style>
-    /* 全体背景（オレンジグラデーション） */
+    /* 全体背景（鮮やかなイエローグラデーション） */
     .stApp {
-        background: linear-gradient(135deg, #FF9900 0%, #FF5500 100%);
-        color: #333333;
+        background: linear-gradient(135deg, #FFEB3B 0%, #FBC02D 100%);
+        color: #212121;
     }
     
     /* ヘッダータイトル */
     .main-header {
         font-size: 2.2rem;
-        color: #FFFFFF;
+        color: #3E2723;
         text-align: center;
         font-weight: bold;
         margin-bottom: 1.5rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
     }
     
-    /* イベントカード（白ベースで読みやすく） */
+    /* イベントカード（白ベースで視認性を高く） */
     .event-card {
         background-color: #FFFFFF;
         padding: 1.5rem;
         border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.12);
         margin-bottom: 1.5rem;
+        border-left: 8px solid #F57F17;
     }
     
     /* カード内のタイトル */
     .event-title {
-        color: #E65100;
+        color: #F57F17;
         margin-top: 0;
         font-size: 1.4rem;
-        border-bottom: 2px solid #FFE0B2;
+        border-bottom: 2px solid #FFF59D;
         padding-bottom: 0.3rem;
     }
 
     /* 参加者バッジ */
     .participant-badge {
         display: inline-block;
-        background-color: #FFF3E0;
+        background-color: #FFFDE7;
         color: #E65100;
-        padding: 0.3rem 0.8rem;
+        padding: 0.38rem 0.85rem;
         border-radius: 20px;
         margin: 0.2rem;
         font-weight: bold;
-        border: 1px solid #FFB74D;
+        border: 1px solid #FBC02D;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -143,7 +144,7 @@ with tab1:
             current_count = len(df_parts)
             capacity = row['capacity']
             
-            # 各練習会の枠
+            # 各練習会のカード表示
             st.markdown(f"""
             <div class="event-card">
                 <h3 class="event-title">🏓 {row['title']}（{row['date']}）</h3>
@@ -154,7 +155,7 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
             
-            # 参加者一覧のリアルタイム表示
+            # 参加者一覧（ニックネーム表示）
             st.write("▼ **現在の参加メンバー（ニックネーム）**")
             if df_parts.empty:
                 st.caption("（まだ参加申込はありません。一番乗りで申し込みましょう！）")
