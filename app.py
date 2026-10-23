@@ -22,7 +22,7 @@ WEEKDAYS = "月火水木金土日"
 def admin_password():
     # 【改善1】管理者パスワード（Streamlit Cloud の Secrets に admin_password を設定）
     try:
-        return st.secrets["admin_password"]
+        return st.secrets["1234"]
     except (KeyError, FileNotFoundError):
         return os.environ.get("ADMIN_PASSWORD", "admin")
 
