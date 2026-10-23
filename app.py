@@ -30,6 +30,8 @@ WEEKDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "�
 SOURCES = ["友人・知人の紹介", "家族", "Instagram/SNS", "Web検索", "チラシ・ポスター", "体験会", "その他"]
 # (必要な参加回数, レベル名, アイコン)
 LEVELS = [(0, "ビギナー", "🌱"), (1, "ルーキー", "🥚"), (6, "プレイヤー", "🏓"), (15, "エース", "🔥"), (30, "レジェンド", "👑")]
+# 練習会の時間の選択肢（30分おき・6:00〜22:00）
+TIME_SLOTS = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in (0, 30) if (h, m) <= (22, 0)]
 NEWS_CATEGORIES = {"お知らせ": ("📣", "info"), "大会情報": ("🏆", "event"), "その他": ("📝", "other")}
 
 SHEETS = {
@@ -881,15 +883,27 @@ def close_row(prefix: str) -> None:
     st.session_state.pop(f"{prefix}_open", None)
 
 
+def split_time(text: str) -> tuple[str, str]:
+    """「09:00〜11:00」→ ("09:00", "11:00")。読み取れなければ 9時〜11時。"""
+    m = re.search(r"(\d{1,2}):(\d{2})\D+(\d{1,2}):(\d{2})", text or "")
+    if not m:
+        return "09:00", "11:00"
+    return f"{int(m[1]):02d}:{m[2]}", f"{int(m[3]):02d}:{m[4]}"
+
+
 def event_form(key: str, ev: dict | None, base: dict) -> None:
     """練習会の入力フォーム。ev があればその練習会を更新、なければ新規作成。"""
     with st.form(key):
         d = st.date_input("日付", value=date.fromisoformat(ev["date"]) if ev else now().date())
         title = st.text_input("タイトル", value=base.get("title", "エンジョイDAY"))
         tag = st.text_input("タグ（任意・例: 経験者メイン）", value=base.get("tag", ""))
+        start0, end0 = split_time(base.get("time", ""))
+        # 30分おき以外の時刻が登録済みでも、そのまま選べるように加える
+        slots = sorted(set(TIME_SLOTS) | {start0, end0})
         c1, c2 = st.columns(2)
-        time_ = c1.text_input("時間", value=base.get("time", "09:00〜11:00"))
-        place = c2.text_input("場所", value=base.get("place", ""))
+        start = c1.selectbox("開始", slots, index=slots.index(start0))
+        end = c2.selectbox("終了", slots, index=slots.index(end0))
+        place = st.text_input("場所", value=base.get("place", ""))
         c3, c4 = st.columns(2)
         cap = c3.number_input("定員", min_value=1, max_value=300, value=int(base.get("capacity") or 20))
         fee = c4.text_input("参加費", value=base.get("fee", ""))
@@ -901,7 +915,10 @@ def event_form(key: str, ev: dict | None, base: dict) -> None:
         close_row("adm_ev")
         st.rerun()
     if save:
-        values = {"date": d.isoformat(), "title": title.strip() or "練習会", "tag": tag.strip(), "time": time_,
+        if end <= start:
+            st.warning("終了時刻は開始時刻より後にしてください。")
+            return
+        values = {"date": d.isoformat(), "title": title.strip() or "練習会", "tag": tag.strip(), "time": f"{start}〜{end}",
                   "place": place, "capacity": int(cap), "fee": fee, "description": desc}
         if ev:
             _update("events", ev["id"], values)
