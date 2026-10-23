@@ -489,22 +489,17 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .ev-note { color: var(--sub); font-weight: 700; line-height: 1.7; margin: 8px 0; }
 .ev-empty { color: #888; font-weight: 700; margin: 14px 0; }
 .ev-who { font-weight: 900; margin: 8px 18px 0; }
-[class*="st-key-evbtn_"] { padding: 6px 18px 4px; }
+[class*="st-key-evbtn_"] { padding: 6px 18px 12px; }
+/* 参加ボタン（参加する／参加予定／満員です）は文字が収まる大きさにして中央に置く */
+[class*="st-key-evbtn_"] > div { flex: 0 0 auto !important; margin: 0 auto; }
 [class*="st-key-evbtn_"] button {
-  min-height: 62px; border-radius: 16px !important; border: 3px solid var(--ink) !important;
-  box-shadow: 4px 5px 0 var(--ink); font-size: 1.12rem !important; font-weight: 900 !important;
-  background: #fff !important; color: var(--ink) !important;
+  min-height: 0 !important; padding: 6px 22px !important; border-radius: 999px !important;
+  border: 3px solid var(--ink) !important; box-shadow: 3px 4px 0 var(--ink);
+  font-weight: 900 !important; background: #fff !important; color: var(--ink) !important;
 }
-[class*="st-key-evbtn_"] button p { font-size: 1.12rem !important; font-weight: 900 !important; }
-[class*="st-key-evbtn_"] > div { flex: 1 1 0 !important; min-width: 0; }
+[class*="st-key-evbtn_"] button p { font-size: 1rem !important; font-weight: 900 !important; }
 [class*="st-key-evbtn_"] button[kind="primary"] { background: var(--brand) !important; }
-/* 参加予定ボタンは文字が収まる大きさにして中央に置く */
-[class*="st-key-evbtn_"] > [class*="st-key-go_on_"] { flex: 0 0 auto !important; margin: 0 auto; }
-[class*="st-key-go_on_"] button {
-  background: var(--ink) !important; color: var(--brand) !important;
-  min-height: 0 !important; padding: 6px 22px !important; border-radius: 999px !important; box-shadow: 3px 4px 0 var(--ink);
-}
-[class*="st-key-go_on_"] button p { font-size: 1rem !important; }
+[class*="st-key-go_on_"] button { background: var(--ink) !important; color: var(--brand) !important; }
 [class*="st-key-evbtn_"] button:disabled { background: #e6e6e6 !important; color: #999 !important; box-shadow: none; }
 .ev-hint { color: var(--sub); font-size: .85rem; font-weight: 700; text-align: center; margin: 4px 0 22px; }
 .ev-spacer { height: 14px; }
@@ -776,7 +771,7 @@ def render_buttons(data: dict, ev: dict, person: dict | None, show_name: bool, f
             go = st.button("✅ 参加予定", key=f"go_on_{ev['id']}_{pid}", width="content")
         else:
             go = st.button("満員です" if full else "🏓 参加する", key=f"go_{ev['id']}_{pid}",
-                           type="primary", width="stretch", disabled=full)
+                           type="primary", width="content", disabled=full)
     if s == "attending":
         md('<div class="ev-hint">もう一度押すと不参加になります</div>')
     if not go:
