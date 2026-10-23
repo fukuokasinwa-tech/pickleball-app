@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import hashlib
 import html
@@ -318,7 +319,7 @@ def set_status(event_id: str, member_id: str, status: str | None) -> str:
 CSS = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800;900&display=swap');
-:root { --ink:#111; --yellow:#FFE600; --red:#E60012; --bg:#F2F2EE; --pill:#F1F1EC; --sub:#555; }
+:root { --ink:#111; --brand:#FE971A; --brand-light:#FEDC5C; --red:#E60012; --bg:#F2F2EE; --pill:#F1F1EC; --sub:#555; }
 .stApp, .stApp button, .stApp input, .stApp textarea, .stApp label {
   font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', sans-serif !important;
 }
@@ -332,23 +333,20 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
   width: auto !important; max-width: none !important; align-self: stretch;
   border-radius: 0 0 28px 28px; position: relative; overflow: hidden;
 }
-.pk-ball {
-  position: absolute; top: -95px; right: -95px; width: 240px; height: 240px; border-radius: 50%;
-  background:
-    radial-gradient(circle at 32% 62%, var(--ink) 0 19px, transparent 20px),
-    radial-gradient(circle at 58% 44%, var(--ink) 0 19px, transparent 20px),
-    radial-gradient(circle at 30% 88%, var(--ink) 0 18px, transparent 19px),
-    radial-gradient(circle at 62% 82%, var(--ink) 0 18px, transparent 19px),
-    radial-gradient(circle at 84% 60%, var(--ink) 0 18px, transparent 19px),
-    radial-gradient(circle at 88% 30%, var(--ink) 0 18px, transparent 19px),
-    radial-gradient(circle at 60% 12%, var(--ink) 0 16px, transparent 17px),
-    var(--yellow);
+.pk-logo {
+  position: absolute; top: 20px; right: 18px; width: 124px; height: 124px; z-index: 1;
+  transform: rotate(-8deg); pointer-events: none;
+  filter: drop-shadow(0 0 22px rgba(254, 151, 26, .45)) drop-shadow(4px 6px 0 rgba(0, 0, 0, .55));
+}
+.pk-glow {
+  position: absolute; top: -120px; right: -120px; width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(254, 151, 26, .28) 0%, rgba(254, 151, 26, 0) 70%);
   pointer-events: none;
 }
 .pk-hero-text { position: relative; z-index: 1; }
-.pk-kicker { color: var(--yellow); font-weight: 900; letter-spacing: .2em; font-size: .85rem; }
+.pk-kicker { color: var(--brand); font-weight: 900; letter-spacing: .2em; font-size: .85rem; }
 .pk-title { color: #fff; font-weight: 900; font-size: 2.9rem; line-height: 1.12; margin-top: 10px; }
-.pk-title .y { color: var(--yellow); }
+.pk-title .y { color: var(--brand); }
 .pk-sub { color: #cfcfcf; margin-top: 14px; font-weight: 700; }
 .st-key-hero_actions { position: relative; z-index: 1; margin-top: 6px; }
 .st-key-hero button {
@@ -359,7 +357,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 /* ---- 白カード（レベル・使い方・ログイン） ---- */
 .pk-card, .st-key-howto, .st-key-login {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
-  box-shadow: 5px 7px 0 0 var(--yellow), 5px 7px 0 3px var(--ink);
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
 }
 .pk-level { font-size: 1.08rem; line-height: 1.7; }
@@ -369,7 +367,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-howto-title { font-size: 1.2rem; font-weight: 900; margin-bottom: 6px; }
 .pk-step { display: flex; align-items: center; gap: 12px; font-weight: 900; font-size: 1.08rem; margin: 12px 0; }
 .pk-step .n {
-  flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--yellow);
+  flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--brand);
   border: 2.5px solid var(--ink); display: grid; place-items: center; font-size: .95rem;
 }
 .pk-howto-note { color: var(--sub); font-weight: 700; font-size: .92rem; line-height: 1.7; margin-top: 10px; }
@@ -382,24 +380,24 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 /* ---- ニュース ---- */
 .pk-news {
   background: var(--ink); color: #fff; border-radius: 26px; padding: 22px 22px 18px; margin: 0 8px 26px 0;
-  box-shadow: 5px 7px 0 0 var(--yellow), 5px 7px 0 3px var(--ink);
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
 }
 .pk-badge { display: inline-block; font-weight: 900; font-size: .88rem; letter-spacing: .12em; padding: 5px 12px; border-radius: 6px; }
-.pk-badge.info { background: var(--yellow); color: var(--ink); }
+.pk-badge.info { background: var(--brand); color: var(--ink); }
 .pk-badge.event { background: var(--red); color: #fff; }
 .pk-badge.other { background: #fff; color: var(--ink); }
-.pk-news-title { color: var(--yellow); font-weight: 900; font-size: 1.35rem; line-height: 1.45; margin: 12px 0 10px; }
+.pk-news-title { color: var(--brand); font-weight: 900; font-size: 1.35rem; line-height: 1.45; margin: 12px 0 10px; }
 .pk-news-body { white-space: pre-wrap; line-height: 1.85; font-size: 1rem; }
 .pk-news-date { color: #999; margin-top: 12px; font-weight: 700; }
 
 /* ---- 練習会カード ---- */
 [class*="st-key-evcard_"] {
   background: #fff; border: 3px solid var(--ink); border-radius: 24px; overflow: hidden;
-  box-shadow: 5px 7px 0 0 var(--yellow), 5px 7px 0 3px var(--ink);
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 30px 0; gap: 0 !important;
 }
 .ev-top { display: grid; grid-template-columns: 98px 1fr; border-bottom: 3px solid var(--ink); }
-.ev-date { background: var(--yellow); border-right: 3px solid var(--ink); display: flex; flex-direction: column;
+.ev-date { background: var(--brand); border-right: 3px solid var(--ink); display: flex; flex-direction: column;
   align-items: center; justify-content: center; font-weight: 900; padding: 14px 4px; }
 .ev-date .m { font-size: 1rem; }
 .ev-date .d { font-size: 3.1rem; line-height: 1; margin: 4px 0; }
@@ -415,15 +413,15 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .ev-count .n { font-size: 2.7rem; line-height: 1; }
 .ev-count .of { font-size: 1.3rem; }
 .ev-chip { border: 2.5px solid var(--ink); border-radius: 999px; padding: 4px 14px; font-size: 1rem; }
-.ev-chip.ask { background: var(--yellow); }
-.ev-chip.yes { background: var(--ink); color: var(--yellow); }
+.ev-chip.ask { background: var(--brand); }
+.ev-chip.yes { background: var(--ink); color: var(--brand); }
 .ev-chip.no { background: #fff; color: var(--sub); }
 .ev-chip.full { background: var(--red); color: #fff; }
 .ev-first { color: var(--sub); font-weight: 800; }
 .pk-roster { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 12px; }
 .pk-pill { display: inline-flex; align-items: center; gap: 8px; background: var(--pill); border: 2.5px solid var(--ink);
   border-radius: 999px; padding: 7px 15px; font-weight: 900; font-size: 1.05rem; }
-.pk-pill.me { background: var(--yellow); }
+.pk-pill.me { background: var(--brand); }
 .pk-pill.first { background: var(--red); color: #fff; }
 .pk-pill .hatsu { background: var(--ink); color: #fff; font-size: .78rem; border-radius: 5px; padding: 1px 6px; }
 .pk-pill .src { font-size: .82rem; font-weight: 800; }
@@ -438,14 +436,14 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 [class*="st-key-evbtn_"] button p { font-size: 1.12rem !important; font-weight: 900 !important; }
 [class*="st-key-evbtn_"] > div { flex: 1 1 0 !important; min-width: 0; }
-[class*="st-key-evbtn_"] button[kind="primary"] { background: var(--yellow) !important; }
+[class*="st-key-evbtn_"] button[kind="primary"] { background: var(--brand) !important; }
 [class*="st-key-absent_on_"] button { background: var(--ink) !important; color: #fff !important; }
 [class*="st-key-evbtn_"] button:disabled { background: #e6e6e6 !important; color: #999 !important; box-shadow: none; }
 .ev-spacer { height: 14px; }
 
 @media (max-width: 480px) {
   .pk-title { font-size: 2.3rem; }
-  .pk-ball { width: 200px; height: 200px; top: -80px; right: -80px; }
+  .pk-logo { width: 108px; height: 108px; top: 22px; right: 12px; }
   .ev-top { grid-template-columns: 84px 1fr; }
   .ev-date .d { font-size: 2.6rem; }
 }
@@ -456,6 +454,15 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 # ---------------------------------------------------------------------------
 # 表示
 # ---------------------------------------------------------------------------
+
+LOGO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+
+
+@st.cache_data(show_spinner=False)
+def logo_data_uri() -> str:
+    with open(os.path.join(LOGO_DIR, "logo.webp"), "rb") as f:
+        return "data:image/webp;base64," + base64.b64encode(f.read()).decode()
+
 
 def esc(s) -> str:
     return html.escape(str(s or ""))
@@ -489,7 +496,7 @@ def sign_out() -> None:
 
 def render_hero(data: dict, me: dict | None) -> None:
     with st.container(key="hero"):
-        md("""<div class="pk-ball"></div>
+        md(f"""<div class="pk-glow"></div><img class="pk-logo" src="{logo_data_uri()}" alt="YAME PICK">
 <div class="pk-hero-text">
   <div class="pk-kicker">PICKLEBALL COMMUNITY</div>
   <div class="pk-title">YAME <span class="y">PICK</span><br>参加確認</div>
@@ -498,7 +505,7 @@ def render_hero(data: dict, me: dict | None) -> None:
         if not me:
             return
         with st.container(key="hero_actions", horizontal=True, gap="small"):
-            with st.popover(f"🟡 {me['name']}　変更"):
+            with st.popover(f"🟠 {me['name']}　変更"):
                 st.write(f"**{me['name']}** さんでログイン中")
                 st.caption("別の人に切り替えるときはログアウトしてください。")
                 if st.button("ログアウト", key="logout"):
@@ -803,7 +810,7 @@ def admin_attendance(data: dict) -> None:
         if not m:
             continue
         c1, c2, c3 = st.columns([3, 2, 1])
-        c1.write(f"{'🟡' if a['status'] == 'attending' else '⚪'} {m['name']}")
+        c1.write(f"{'🟠' if a['status'] == 'attending' else '⚪'} {m['name']}")
         other = "absent" if a["status"] == "attending" else "attending"
         if c2.button("不参加にする" if other == "absent" else "参加にする", key=f"adm_flip_{a['id']}"):
             _update("attendance", a["id"], {"status": other, "updated_at": now().isoformat(timespec="seconds")})
@@ -854,7 +861,7 @@ def admin_csv(data: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    st.set_page_config(page_title="YAME PICK 参加確認", page_icon="🏓", layout="centered")
+    st.set_page_config(page_title="YAME PICK 参加確認", page_icon=os.path.join(LOGO_DIR, "logo.png"), layout="centered")
     md(CSS)
     try:
         data = load_data()
