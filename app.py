@@ -467,6 +467,18 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .ev-hint { color: var(--sub); font-size: .85rem; font-weight: 700; text-align: center; margin: 4px 0 22px; }
 .ev-spacer { height: 14px; }
 
+/* ---- 管理者メニューのタブ：スマホでも全部見えるよう折り返して並べる ---- */
+.stTabs [role="tablist"] { flex-wrap: wrap; gap: 6px 8px; overflow: visible !important; padding-bottom: 6px; }
+.stTabs [role="tab"] {
+  border: 2px solid var(--ink); border-radius: 999px; padding: 4px 12px !important;
+  height: auto !important; margin: 0 !important; background: #fff;
+}
+.stTabs [role="tab"][aria-selected="true"] { background: var(--brand); color: var(--ink) !important; }
+.stTabs [role="tab"]::after, .stTabs [role="tab"]::before { display: none !important; }
+.stTabs [role="tab"] p { font-weight: 800; color: var(--ink) !important; }
+.stTabs .react-aria-SelectionIndicator { display: none !important; }  /* 選択中タブの赤い下線 */
+[data-testid="stTabsScrollRight"], [data-testid="stTabsScrollLeft"] { display: none !important; }
+
 @media (max-width: 480px) {
   .pk-title { font-size: 2.3rem; }
   .pk-logo { width: 108px; height: 108px; top: 22px; right: 12px; }
