@@ -24,7 +24,7 @@ def admin_password():
     try:
         return st.secrets["admin_password"]
     except (KeyError, FileNotFoundError):
-        return os.environ.get("1234", "admin")
+        return os.environ.get("ADMIN_PASSWORD", "admin")
 
 
 def connect():
@@ -290,7 +290,7 @@ with tab1:
 with tab2:
     # 【改善1】パスワードを入力しないと管理機能を表示しない
     if not st.session_state.get("is_admin"):
-        pw = st.text_input("管理者パスワード", type="password")
+        pw = st.text_input("管理者パスワード", type="1234")
         if st.button("ログイン"):
             if pw == admin_password():
                 st.session_state["is_admin"] = True
