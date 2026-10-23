@@ -13,6 +13,7 @@ import csv
 import hashlib
 import html
 import io
+import json
 import os
 import uuid
 from datetime import date, datetime
@@ -64,9 +65,29 @@ def new_id() -> str:
 # データ層 (Google スプレッドシート)
 # ---------------------------------------------------------------------------
 
+def _service_account_info() -> dict:
+    if "gcp_service_account" in st.secrets:
+        return dict(st.secrets["gcp_service_account"])
+    # JSON キーファイルの中身をそのまま貼り付ける形式にも対応
+    return json.loads(st.secrets["gcp_service_account_json"])
+
+
+def missing_settings() -> list[str]:
+    """Secrets に足りない設定項目の名前を返す。"""
+    try:
+        missing = []
+        if "gsheets" not in st.secrets or "spreadsheet" not in st.secrets["gsheets"]:
+            missing.append("[gsheets] spreadsheet（スプレッドシートのURL）")
+        if "gcp_service_account" not in st.secrets and "gcp_service_account_json" not in st.secrets:
+            missing.append("gcp_service_account_json（Google の鍵 JSON）")
+        return missing
+    except FileNotFoundError:
+        return ["Secrets がまったく設定されていません"]
+
+
 @st.cache_resource(show_spinner=False)
 def _spreadsheet() -> gspread.Spreadsheet:
-    client = gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]))
+    client = gspread.service_account_from_dict(_service_account_info())
     target = st.secrets["gsheets"]["spreadsheet"]
     sh = client.open_by_url(target) if target.startswith("http") else client.open_by_key(target)
     _ensure_sheets(sh)
@@ -860,7 +881,13 @@ def main() -> None:
     try:
         data = load_data()
     except (KeyError, FileNotFoundError):
-        st.error("Google スプレッドシートの設定が見つかりません。`.streamlit/secrets.toml` を確認してください。")
+        items = "".join(f"\n- {m}" for m in missing_settings())
+        st.error("Google スプレッドシートの設定が見つかりません。Streamlit Cloud の Settings → Secrets に"
+                 f"次の項目を追加してください（secrets.toml.example 参照）。{items}")
+        st.stop()
+    except json.JSONDecodeError:
+        st.error("gcp_service_account_json の貼り付け方が正しくありません。JSON ファイルの中身を "
+                 "`'''` と `'''` の間に、最初の { から最後の } まで丸ごと貼り付けてください。")
         st.stop()
     except gspread.exceptions.SpreadsheetNotFound:
         st.error("スプレッドシートが見つかりません。URLと、サービスアカウントへの共有（編集者）を確認してください。")
