@@ -1,4 +1,4 @@
-"""ピッくるめ 参加確認 (Streamlit + Google スプレッドシート)
+"""YAME PICK 参加確認 (Streamlit + Google スプレッドシート)
 
 起動:  streamlit run app.py
 設定:  .streamlit/secrets.toml (secrets.toml.example を参照)
@@ -259,29 +259,19 @@ def family_of(data: dict, member_id: str) -> list[dict]:
 # 書き込み操作
 # ---------------------------------------------------------------------------
 
-def pin_hash(member_id: str, pin: str) -> str:
-    return hashlib.sha256(f"{member_id}:{pin}".encode()).hexdigest()
-
-
 def login_token(member: dict) -> str:
     key = secret("token_secret", admin_password())
     return hashlib.sha256(f"{key}:{member['id']}:{member['pin_hash']}".encode()).hexdigest()[:16]
 
 
-def login_or_register(name: str, pin: str, source: str, referrer: str) -> tuple[str, dict | None]:
+def login_or_register(name: str, source: str, referrer: str) -> tuple[str, dict | None]:
+    """お名前だけでログイン。登録済みならその人として、未登録なら新規登録する。"""
     data = _fresh_data()
     m = next((m for m in data["members"] if norm(m["name"]) == norm(name)), None)
     if m:
-        if not m["pin_hash"]:
-            if m["family_of"]:
-                return "family", None
-            # 管理者が代理登録した人：最初のログインで数字を設定
-            _update("members", m["id"], {"pin_hash": pin_hash(m["id"], pin)})
-            m["pin_hash"] = pin_hash(m["id"], pin)
-            return "ok", m
-        return ("ok", m) if m["pin_hash"] == pin_hash(m["id"], pin) else ("badpin", None)
+        return ("family", None) if m["family_of"] else ("ok", m)
     mid = new_id()
-    m = {"id": mid, "name": name.strip(), "pin_hash": pin_hash(mid, pin), "family_of": "",
+    m = {"id": mid, "name": name.strip(), "pin_hash": "", "family_of": "",
          "source": source, "referrer": referrer.strip() if source == "友人・知人の紹介" else "",
          "created_at": now().isoformat(timespec="seconds")}
     _append("members", m)
@@ -289,7 +279,7 @@ def login_or_register(name: str, pin: str, source: str, referrer: str) -> tuple[
 
 
 def add_member(name: str, family_of: str = "", source: str = "", referrer: str = "") -> str | None:
-    """家族・代理登録用（数字なし）。名前が重複したら None。"""
+    """家族・代理登録用。名前が重複したら None。"""
     if any(norm(m["name"]) == norm(name) for m in _fresh_data()["members"]):
         return None
     mid = new_id()
@@ -481,7 +471,7 @@ def current_member(data: dict) -> dict | None:
     if not mid and (q := st.query_params.get("me")) and "." in q:
         qid, tok = q.split(".", 1)
         m = find(data["members"], qid)
-        if m and m["pin_hash"] and tok == login_token(m):
+        if m and not m["family_of"] and tok == login_token(m):
             st.session_state["me"] = mid = qid
     return find(data["members"], mid) if mid else None
 
@@ -502,7 +492,7 @@ def render_hero(data: dict, me: dict | None) -> None:
         md("""<div class="pk-ball"></div>
 <div class="pk-hero-text">
   <div class="pk-kicker">PICKLEBALL COMMUNITY</div>
-  <div class="pk-title">ピッ<span class="y">くるめ</span><br>参加確認</div>
+  <div class="pk-title">YAME <span class="y">PICK</span><br>参加確認</div>
   <div class="pk-sub">ボタンひとつで、誰が来るかすぐわかる。</div>
 </div>""")
         if not me:
@@ -537,30 +527,25 @@ def render_hero(data: dict, me: dict | None) -> None:
 
 def render_login() -> None:
     with st.container(key="login"):
-        md('<div class="pk-login-title">👋 お名前と好きな数字を登録</div>')
-        st.caption("2回目以降も、同じお名前と数字でログインできます。")
+        md('<div class="pk-login-title">👋 お名前を登録</div>')
+        st.caption("2回目以降も、同じお名前を入れるとログインできます。")
         name = st.text_input("お名前（表示名）", max_chars=20, placeholder="例: のり")
-        pin = st.text_input("好きな数字（4〜8桁）", max_chars=8, type="password", placeholder="例: 0123")
         with st.expander("はじめての方はこちらも教えてください"):
-            source = st.selectbox("ピッくるめを知ったきっかけ", ["（選択しない）"] + SOURCES)
+            source = st.selectbox("YAME PICKを知ったきっかけ", ["（選択しない）"] + SOURCES)
             referrer = st.text_input("紹介してくれた人", max_chars=20) if source == "友人・知人の紹介" else ""
         if st.button("はじめる 🏓", type="primary", width="stretch"):
             if not name.strip():
                 st.warning("お名前を入力してください。")
-            elif not (pin.isdigit() and 4 <= len(pin) <= 8):
-                st.warning("数字は4〜8桁で入力してください。")
             else:
                 src = "" if source.startswith("（") else source
-                res, m = login_or_register(name, pin, src, referrer)
+                res, m = login_or_register(name, src, referrer)
                 if res in ("ok", "new"):
                     sign_in(m)
                     st.session_state["flash"] = ("ようこそ！登録しました 🎉" if res == "new"
                                                  else f"おかえりなさい、{m['name']} さん！")
                     st.rerun()
-                elif res == "family":
-                    st.error("この名前はご家族として登録されています。登録した方のスマホから出欠を入れてください。")
                 else:
-                    st.error("数字がちがいます。同じ名前の別の方がいる場合は、名前を少し変えてください。")
+                    st.error("この名前はご家族として登録されています。登録した方のスマホから出欠を入れてください。")
 
 
 def render_level(data: dict, me: dict) -> None:
@@ -579,10 +564,10 @@ def render_howto() -> None:
             st.query_params["guide"] = "off"
             st.rerun()
         md("""<div class="pk-howto-title">📖 使い方はかんたん！</div>
-<div class="pk-step"><span class="n">1</span>お名前と好きな数字を登録</div>
+<div class="pk-step"><span class="n">1</span>お名前を登録</div>
 <div class="pk-step"><span class="n">2</span>行ける日の「🏓 参加する」をタップ</div>
 <div class="pk-step"><span class="n">3</span>予定が変わったら、もう一度タップで取消</div>
-<div class="pk-howto-note">別のスマホやブラウザで開いても、同じ名前と数字でログインできます。右上の × でこの案内を閉じられます。</div>""")
+<div class="pk-howto-note">別のスマホやブラウザで開いても、同じお名前でログインできます。右上の × でこの案内を閉じられます。</div>""")
 
 
 def render_news(data: dict) -> None:
@@ -622,7 +607,6 @@ def render_event(data: dict, ev: dict, me: dict | None, past: bool = False) -> N
     d = date.fromisoformat(ev["date"])
     members = {m["id"]: m for m in data["members"]}
     going = [members[a["member_id"]] for a in event_rows(data, ev["id"], "attending") if a["member_id"] in members]
-    absent = [members[a["member_id"]] for a in event_rows(data, ev["id"], "absent") if a["member_id"] in members]
     n_first = sum(is_first_time(data, m["id"], ev) for m in going)
     cap = ev["capacity"]
     full = bool(cap) and len(going) >= cap
@@ -653,8 +637,6 @@ def render_event(data: dict, ev: dict, me: dict | None, past: bool = False) -> N
     notes = ""
     if n_first:
         notes += '<div class="ev-note">🔴 赤いお名前 ＝ 今回が初参加の方です。みんなで歓迎しましょう！</div>'
-    if absent:
-        notes += f'<div class="ev-note">不参加：{"、".join(esc(m["name"]) for m in absent)}</div>'
 
     with st.container(key=f"evcard_{ev['id']}"):
         md(f"""<div class="ev-top">
@@ -689,7 +671,7 @@ def render_buttons(data: dict, ev: dict, person: dict | None, show_name: bool, f
     if not (go or no):
         return
     if person is None:
-        st.session_state["flash_warn"] = "まずは上の「お名前と好きな数字を登録」からログインしてください 🙏"
+        st.session_state["flash_warn"] = "まずは上の「お名前を登録」からログインしてください 🙏"
         st.rerun()
     if go:
         res = set_status(ev["id"], pid, "absent" if s == "attending" else "attending")
@@ -840,15 +822,11 @@ def admin_attendance(data: dict) -> None:
 
 
 def admin_members(data: dict) -> None:
-    st.caption("数字（PIN）を忘れた方は「数字をリセット」すると、次回ログイン時に新しい数字を設定できます。")
     members = sorted(data["members"], key=lambda m: m["created_at"])
     for m in members:
-        c1, c2, c3 = st.columns([3, 2, 1])
+        c1, c3 = st.columns([5, 1])
         fam = f"（{find(data['members'], m['family_of'])['name']}さんの家族）" if m["family_of"] and find(data["members"], m["family_of"]) else ""
         c1.write(f"{m['name']}{fam}　参加{play_count(data, m['id'])}回")
-        if m["pin_hash"] and c2.button("数字をリセット", key=f"adm_pin_{m['id']}"):
-            _update("members", m["id"], {"pin_hash": ""})
-            st.rerun()
         if c3.button("🗑", key=f"adm_memdel_{m['id']}"):
             _delete("attendance", {m["id"]}, col="member_id")
             _delete("members", {m["id"]})
@@ -876,7 +854,7 @@ def admin_csv(data: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    st.set_page_config(page_title="ピッくるめ 参加確認", page_icon="🏓", layout="centered")
+    st.set_page_config(page_title="YAME PICK 参加確認", page_icon="🏓", layout="centered")
     md(CSS)
     try:
         data = load_data()
