@@ -820,6 +820,7 @@ def render_admin(data: dict) -> None:
                     st.rerun()
                 st.error("パスワードが違います。")
             return
+        admin_share()
         t1, t2, t6, t7, t3, t4, t5 = st.tabs(
             ["📅 練習会", "📣 お知らせ", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
@@ -958,6 +959,40 @@ def news_form(key: str, n: dict | None) -> None:
             _append("news", values | {"id": new_id()})
             st.session_state["flash"] = "お知らせを作成しました。"
         st.rerun()
+
+
+def share_url() -> str:
+    """みんなに配るURL。?me=（自動ログイン用）などは付けない。"""
+    if url := secret("app_url"):  # 独自ドメインなどで変えたいときは Secrets に app_url を書く
+        return url.rstrip("/")
+    url = (getattr(st.context, "url", "") or "").split("?")[0].split("#")[0]
+    url = re.sub(r"/~/\+.*$", "", url)  # Streamlit Cloud の内部パスを取り除く
+    return url.rstrip("/")
+
+
+def admin_share() -> None:
+    url = share_url()
+    with st.container(border=True):
+        md("**🔗 共有用のURL**")
+        if not url:
+            st.caption("URLを取得できませんでした。ブラウザのアドレス欄の「?」より前をコピーしてください。")
+            return
+        st.code(url, language=None)
+        st.caption("枠の右上の📋でコピーできます（スマホは枠をタップすると📋が出ます）。Instagram・LINE にはこのURLを貼ってください"
+                   "（ブラウザのアドレス欄の「?me=…」付きURLを貼ると、開いた人があなたとしてログインしてしまいます）。")
+        with st.expander("📣 告知文のひな形（LINE・Instagram用）"):
+            md("**LINE オープンチャット用**（トーク・ノート・アナウンスに）")
+            st.code(f"🏓 YAME PICK 参加確認ページ\n"
+                    f"練習会の日程と出欠はこちらから👇\n{url}\n\n"
+                    f"お名前を登録して「🏓 参加する」を押すだけ！\n"
+                    f"※最初に英語のボタン（Yes, get this app back up!）が出たら押してください",
+                    language=None, wrap_lines=True)
+            md("**Instagram 投稿・ストーリーズ用**（URLはプロフィールのリンク欄へ）")
+            st.code("🏓 練習会の日程・出欠はプロフィールのリンクから！\n"
+                    "お名前を登録して「参加する」を押すだけ✨\n"
+                    "初心者・未経験の方も大歓迎🙌 パドル無料貸出🆓\n"
+                    "#八女 #ピックルボール #YAMEPICK",
+                    language=None, wrap_lines=True)
 
 
 def admin_events(data: dict) -> None:
