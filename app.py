@@ -290,9 +290,9 @@ with tab1:
 with tab2:
     # 【改善1】パスワードを入力しないと管理機能を表示しない
     if not st.session_state.get("is_admin"):
-        pw = st.text_input("1234", type="password")
+        pw = st.text_input("管理者パスワード", type="password")
         if st.button("ログイン"):
-            if pw == admin_password():
+            if pw == admin_password(1234):
                 st.session_state["is_admin"] = True
                 st.rerun()
             else:
