@@ -737,9 +737,53 @@ def render_admin(data: dict) -> None:
             st.rerun()
 
 
+def delete_event(event_id: str) -> None:
+    _delete("attendance", {event_id}, col="event_id")
+    _delete("events", {event_id})
+
+
+def admin_event_list(data: dict) -> None:
+    """作成済みの練習会を一覧表示し、確認つきで削除できるようにする。"""
+    md("**登録済みの練習会**")
+    if not data["events"]:
+        st.caption("まだ練習会はありません。")
+        return
+    confirm = st.session_state.get("adm_ev_confirm")
+    for e in sorted(data["events"], key=lambda e: e["date"], reverse=True):
+        d = date.fromisoformat(e["date"])
+        n = len(event_rows(data, e["id"], "attending"))
+        past = "（終了）" if e["date"] < today() else ""
+        with st.container(border=True):
+            c1, c2 = st.columns([4, 1.4], vertical_alignment="center")
+            c1.write(f"**{d.month}/{d.day}（{WEEKDAYS[d.weekday()][0]}）** {e['title']}　参加{n}人{past}")
+            if confirm != e["id"]:
+                if c2.button("🗑 削除", key=f"adm_ev_del_{e['id']}", width="stretch"):
+                    st.session_state["adm_ev_confirm"] = e["id"]
+                    st.rerun()
+                continue
+            st.warning(f"この練習会と、出欠データ（{n}人分）を削除します。元に戻せません。")
+            y, no = st.columns(2)
+            if y.button("削除する", key=f"adm_ev_del_ok_{e['id']}", type="primary", width="stretch"):
+                delete_event(e["id"])
+                st.session_state.pop("adm_ev_confirm", None)
+                # 編集欄で選ばれていたら「新しく作る」に戻す（この後に描画されるので変更できる）
+                if st.session_state.get("adm_ev_sel") == e["id"]:
+                    st.session_state["adm_ev_sel"] = "＋ 新しく作る"
+                st.session_state["flash"] = f"{d.month}/{d.day} {e['title']} を削除しました。"
+                st.rerun()
+            if no.button("やめる", key=f"adm_ev_del_ng_{e['id']}", width="stretch"):
+                st.session_state.pop("adm_ev_confirm", None)
+                st.rerun()
+
+
 def admin_events(data: dict) -> None:
+    admin_event_list(data)
+    st.divider()
+    md("**練習会の作成・編集**")
     opts = ["＋ 新しく作る"] + [e["id"] for e in reversed(data["events"])]
     labels = {e["id"]: f"{e['date']} {e['title']}" for e in data["events"]}
+    if st.session_state.get("adm_ev_sel") not in opts:
+        st.session_state["adm_ev_sel"] = opts[0]
     sel = st.selectbox("練習会", opts, format_func=lambda x: labels.get(x, x), key="adm_ev_sel")
     ev = find(data["events"], sel)
     # 新規作成時は直近の練習会の内容を初期値にする
@@ -763,11 +807,6 @@ def admin_events(data: dict) -> None:
             else:
                 _append("events", values | {"id": new_id()})
             st.session_state["flash"] = "練習会を保存しました。"
-            st.rerun()
-    if ev and st.checkbox("この練習会と出欠データを削除する", key=f"adm_ev_delchk_{sel}"):
-        if st.button("削除を実行", key=f"adm_ev_del_{sel}"):
-            _delete("attendance", {ev["id"]}, col="event_id")
-            _delete("events", {ev["id"]})
             st.rerun()
 
 
