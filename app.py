@@ -53,7 +53,7 @@ def secret(key: str, default: str = "") -> str:
 
 
 def admin_password() -> str:
-    return secret("admin_password", "admin")
+    return secret("admin_password", "1234")
 
 
 def new_id() -> str:
