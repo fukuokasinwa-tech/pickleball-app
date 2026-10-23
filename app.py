@@ -35,6 +35,13 @@ SHEETS = {
     "events": ["id", "date", "title", "tag", "time", "place", "capacity", "fee", "description"],
     "attendance": ["id", "event_id", "member_id", "status", "updated_at"],
     "news": ["id", "date", "category", "title", "body"],
+    "settings": ["id", "value"],  # id = 設定名（howto_title など）
+}
+# 「使い方はかんたん！」の初期の文。管理者メニューで書き換えると settings シートに保存される
+HOWTO_DEFAULT = {
+    "howto_title": "📖 使い方はかんたん！",
+    "howto_steps": "お名前を登録\n行ける日の「🏓 参加する」をタップ\n予定が変わったら、もう一度タップで不参加に",
+    "howto_note": "別のスマホやブラウザで開いても、同じお名前でログインできます。右上の × でこの案内を閉じられます。",
 }
 CACHE_TTL = 15  # 秒。他の人の出欠が画面に反映されるまでの最大遅延
 
@@ -554,7 +561,27 @@ def render_login() -> None:
                     st.error("この名前はご家族として登録されています。登録した方のスマホから出欠を入れてください。")
 
 
-def render_howto() -> None:
+def setting(data: dict, key: str) -> str:
+    row = find(data["settings"], key)
+    return row["value"] if row else HOWTO_DEFAULT[key]
+
+
+def save_setting(data: dict, key: str, value: str) -> None:
+    if find(data["settings"], key):
+        _update("settings", key, {"value": value})
+    else:
+        _append("settings", {"id": key, "value": value})
+
+
+def howto_html(title: str, steps: str, note: str) -> str:
+    lines = [ln.strip() for ln in steps.splitlines() if ln.strip()]
+    step_html = "".join(f'<div class="pk-step"><span class="n">{i}</span>{esc(ln)}</div>'
+                        for i, ln in enumerate(lines, 1))
+    note_html = f'<div class="pk-howto-note">{esc(note).replace(chr(10), "<br>")}</div>' if note.strip() else ""
+    return f'<div class="pk-howto-title">{esc(title)}</div>{step_html}{note_html}'
+
+
+def render_howto(data: dict) -> None:
     if st.session_state.get("hide_howto") or st.query_params.get("guide") == "off":
         return
     with st.container(key="howto"):
@@ -562,11 +589,7 @@ def render_howto() -> None:
             st.session_state["hide_howto"] = True
             st.query_params["guide"] = "off"
             st.rerun()
-        md("""<div class="pk-howto-title">📖 使い方はかんたん！</div>
-<div class="pk-step"><span class="n">1</span>お名前を登録</div>
-<div class="pk-step"><span class="n">2</span>行ける日の「🏓 参加する」をタップ</div>
-<div class="pk-step"><span class="n">3</span>予定が変わったら、もう一度タップで取消</div>
-<div class="pk-howto-note">別のスマホやブラウザで開いても、同じお名前でログインできます。右上の × でこの案内を閉じられます。</div>""")
+        md(howto_html(*(setting(data, k) for k in HOWTO_DEFAULT)))
 
 
 def render_news(data: dict) -> None:
@@ -712,11 +735,13 @@ def render_admin(data: dict) -> None:
                     st.rerun()
                 st.error("パスワードが違います。")
             return
-        t1, t2, t3, t4, t5 = st.tabs(["📅 練習会", "📣 お知らせ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
+        t1, t2, t6, t3, t4, t5 = st.tabs(["📅 練習会", "📣 お知らせ", "📖 使い方", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
             admin_news(data)
+        with t6:
+            admin_howto(data)
         with t3:
             admin_attendance(data)
         with t4:
@@ -875,6 +900,32 @@ def admin_news(data: dict) -> None:
     news_form("adm_news_form_new", None)
 
 
+def admin_howto(data: dict) -> None:
+    st.caption("トップの「使い方はかんたん！」の案内文を編集できます。手順は1行に1つ書くと、自動で 1, 2, 3… と番号がつきます。")
+    with st.form("adm_howto_form"):
+        title = st.text_input("タイトル", value=setting(data, "howto_title"))
+        steps = st.text_area("手順（1行に1つ）", value=setting(data, "howto_steps"), height=130)
+        note = st.text_area("補足（小さい文字で表示・空欄なら非表示）", value=setting(data, "howto_note"), height=90)
+        save = st.form_submit_button("保存", type="primary", width="stretch")
+    if save:
+        if not title.strip() and not steps.strip():
+            st.warning("タイトルか手順を入力してください。")
+        else:
+            for key, value in (("howto_title", title.strip()), ("howto_steps", steps), ("howto_note", note.strip())):
+                save_setting(data, key, value)
+            st.session_state["flash"] = "使い方の案内を保存しました。"
+            st.rerun()
+    md("**現在の表示**")
+    with st.container(border=True):
+        md(howto_html(title, steps, note))
+    if st.session_state.get("hide_howto") or st.query_params.get("guide") == "off":
+        st.caption("※ この端末では案内を × で閉じているため、トップには表示されていません。")
+    if st.button("初期の文に戻す", key="adm_howto_reset"):
+        _delete("settings", set(HOWTO_DEFAULT))
+        st.session_state["flash"] = "使い方の案内を初期の文に戻しました。"
+        st.rerun()
+
+
 def admin_attendance(data: dict) -> None:
     if not data["events"]:
         st.info("練習会がありません。")
@@ -969,7 +1020,7 @@ def main() -> None:
         st.toast(msg, icon="⚠️")
     if not me:
         render_login()
-    render_howto()
+    render_howto(data)
     render_news(data)
     render_events(data, me)
     render_admin(data)
