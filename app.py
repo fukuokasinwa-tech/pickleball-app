@@ -17,6 +17,7 @@ import io
 import json
 import os
 import re
+import time
 import uuid
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -125,24 +126,59 @@ def _ensure_sheets(sh: gspread.Spreadsheet) -> None:
         _seed(sh)
 
 
+def _call(fn, *args, **kwargs):
+    """Google の読み書き回数の上限（1分あたり）に当たったら、少し待って再試行する。"""
+    for wait in (1, 2, 4, 8):
+        try:
+            return fn(*args, **kwargs)
+        except gspread.exceptions.APIError as e:
+            if e.response.status_code not in (429, 500, 502, 503):
+                raise
+            time.sleep(wait)
+    return fn(*args, **kwargs)
+
+
+@st.cache_resource(show_spinner=False)
+def _worksheets() -> dict[str, gspread.Worksheet]:
+    """シート名 → ワークシート。毎回 Google に問い合わせないよう覚えておく。"""
+    return {ws.title: ws for ws in _call(_spreadsheet().worksheets)}
+
+
+def _refresh_worksheets() -> None:
+    # 接続はキャッシュされるので、アプリ更新でシートが増えたときや、
+    # シートを消してしまったときはここで作り直す
+    _ensure_sheets(_spreadsheet())
+    _worksheets.clear()
+
+
 def _ws(name: str) -> gspread.Worksheet:
-    sh = _spreadsheet()
-    try:
-        return sh.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
-        # 接続はキャッシュされるので、アプリ更新でシートが増えたときや、
-        # シートを消してしまったときはここで作り直す
-        _ensure_sheets(sh)
-        return sh.worksheet(name)
+    if name not in _worksheets():
+        _refresh_worksheets()
+    return _worksheets()[name]
 
 
 def _to_row(rec: dict, name: str) -> list:
     return [rec.get(c, "") for c in SHEETS[name]]
 
 
-def _read(name: str) -> list[dict]:
-    """全行を文字列のまま読む (get_all_records は数値っぽいIDを変換してしまうため使わない)。"""
-    values = _ws(name).get_all_values()
+def _read_all() -> dict[str, list[list[str]]]:
+    """全シートを1回のリクエストでまとめて読む。"""
+    names = list(SHEETS)
+    for name in names:
+        _ws(name)  # シートが無ければ作る（覚えている間は通信なし）
+    ranges = [f"'{n}'" for n in names]
+    try:
+        resp = _call(_spreadsheet().values_batch_get, ranges)
+    except gspread.exceptions.APIError as e:
+        if e.response.status_code != 400:  # 400 = シートを手で消した等で範囲が見つからない
+            raise
+        _refresh_worksheets()
+        resp = _call(_spreadsheet().values_batch_get, ranges)
+    return {n: vr.get("values", []) for n, vr in zip(names, resp["valueRanges"])}
+
+
+def _rows(values: list[list[str]]) -> list[dict]:
+    """全行を文字列のまま辞書にする (get_all_records は数値っぽいIDを変換してしまうため使わない)。"""
     if not values:
         return []
     header = values[0]
@@ -151,7 +187,7 @@ def _read(name: str) -> list[dict]:
 
 
 def _fresh_data() -> dict:
-    data = {name: _read(name) for name in SHEETS}
+    data = {name: _rows(values) for name, values in _read_all().items()}
     for e in data["events"]:
         try:
             e["capacity"] = int(float(e.get("capacity") or 0))
@@ -168,29 +204,29 @@ def load_data() -> dict:
 
 
 def _append(name: str, rec: dict) -> None:
-    _ws(name).append_row(_to_row(rec, name), value_input_option="RAW")
+    _call(_ws(name).append_row, _to_row(rec, name), value_input_option="RAW")
     load_data.clear()
 
 
 def _update(name: str, rec_id: str, changes: dict) -> None:
     ws = _ws(name)
-    ids = ws.col_values(1)
+    ids = _call(ws.col_values, 1)
     if rec_id not in ids:
         return
     idx = ids.index(rec_id) + 1
     header = SHEETS[name]
-    row = ws.row_values(idx)
+    row = _call(ws.row_values, idx)
     current = dict(zip(header, row + [""] * (len(header) - len(row)))) | changes
-    ws.update(values=[_to_row(current, name)], range_name=f"A{idx}", value_input_option="RAW")
+    _call(ws.update, values=[_to_row(current, name)], range_name=f"A{idx}", value_input_option="RAW")
     load_data.clear()
 
 
 def _delete(name: str, values: set[str], col: str = "id") -> None:
     ws = _ws(name)
-    keys = ws.col_values(SHEETS[name].index(col) + 1)
+    keys = _call(ws.col_values, SHEETS[name].index(col) + 1)
     # 下から消すと行番号がずれない
     for idx in sorted((i + 1 for i, k in enumerate(keys) if i > 0 and k in values), reverse=True):
-        ws.delete_rows(idx)
+        _call(ws.delete_rows, idx)
     load_data.clear()
 
 
@@ -1079,9 +1115,23 @@ def main() -> None:
         st.error("スプレッドシートが見つかりません。URLと、サービスアカウントへの共有（編集者）を確認してください。")
         st.stop()
     except gspread.exceptions.APIError as e:
-        st.error(f"Google Sheets API エラー: {e}")
+        show_api_error(e)
         st.stop()
 
+    try:
+        render_page(data)
+    except gspread.exceptions.APIError as e:
+        show_api_error(e)
+
+
+def show_api_error(e: gspread.exceptions.APIError) -> None:
+    if e.response.status_code == 429:
+        st.warning("ただいま混み合っています 🙏 1分ほど待ってから、もう一度お試しください。")
+    else:
+        st.error(f"Google スプレッドシートとの通信でエラーが起きました。少し待ってから再読み込みしてください。（{e}）")
+
+
+def render_page(data: dict) -> None:
     me = current_member(data)
     render_hero(data, me)
     if msg := st.session_state.pop("flash", None):
