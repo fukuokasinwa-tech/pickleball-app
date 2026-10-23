@@ -16,6 +16,7 @@ import html
 import io
 import json
 import os
+import re
 import uuid
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -42,6 +43,15 @@ HOWTO_DEFAULT = {
     "howto_title": "📖 使い方はかんたん！",
     "howto_steps": "お名前を登録\n行ける日の「🏓 参加する」をタップ\n予定が変わったら、もう一度タップで不参加に",
     "howto_note": "別のスマホやブラウザで開いても、同じお名前でログインできます。右上の × でこの案内を閉じられます。",
+}
+# 「テーマ」欄の初期の文。管理者メニューで書き換えると settings シートに保存される
+THEME_DEFAULT = {
+    "theme_title": "🎯 テーマ",
+    "theme_body": "八女でピックルボールを楽しもう‼️\n"
+                  "初心者・未経験者・ちょっとやってみたい方も大歓迎🙌\n"
+                  "テーマは「楽しむ」「つながる」「健康になる」\n"
+                  "体験会・練習会の情報はここで発信🎵\n"
+                  "※パドル無料貸出🆓",
 }
 CACHE_TTL = 15  # 秒。他の人の出欠が画面に反映されるまでの最大遅延
 
@@ -369,7 +379,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 
 /* ---- 白カード（レベル・使い方・ログイン） ---- */
-.pk-card, .st-key-howto, .st-key-login {
+.pk-card, .st-key-howto, .st-key-theme, .st-key-login {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
@@ -385,6 +395,9 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 .pk-howto-note { color: var(--sub); font-weight: 700; font-size: .92rem; line-height: 1.7; margin-top: 10px; }
 .pk-login-title { font-size: 1.2rem; font-weight: 900; }
+.st-key-theme { padding: 20px 22px; }
+.pk-theme-body { font-weight: 800; font-size: 1.05rem; line-height: 1.95; margin-top: 4px; }
+.pk-mark { background: linear-gradient(transparent 58%, rgba(254, 151, 26, .55) 58%); padding: 0 1px; white-space: nowrap; }
 
 /* ---- 見出し ---- */
 .pk-h { display: flex; align-items: center; gap: 14px; font-weight: 900; letter-spacing: .18em; font-size: 1.1rem; margin: 30px 0 16px; }
@@ -570,7 +583,7 @@ def render_login() -> None:
 
 def setting(data: dict, key: str) -> str:
     row = find(data["settings"], key)
-    return row["value"] if row else HOWTO_DEFAULT[key]
+    return row["value"] if row else (HOWTO_DEFAULT | THEME_DEFAULT)[key]
 
 
 def save_setting(data: dict, key: str, value: str) -> None:
@@ -597,6 +610,20 @@ def render_howto(data: dict) -> None:
             st.query_params["guide"] = "off"
             st.rerun()
         md(howto_html(*(setting(data, k) for k in HOWTO_DEFAULT)))
+
+
+def theme_html(title: str, body: str) -> str:
+    # 「楽しむ」のようにカギカッコで囲んだ言葉にはマーカーを引く
+    body_html = re.sub(r"「([^」]+)」", r'<span class="pk-mark">「\1」</span>', esc(body)).replace("\n", "<br>")
+    return f'<div class="pk-howto-title">{esc(title)}</div><div class="pk-theme-body">{body_html}</div>'
+
+
+def render_theme(data: dict) -> None:
+    title, body = (setting(data, k) for k in THEME_DEFAULT)
+    if not (title.strip() or body.strip()):
+        return
+    with st.container(key="theme"):
+        md(theme_html(title, body))
 
 
 def render_news(data: dict) -> None:
@@ -742,13 +769,16 @@ def render_admin(data: dict) -> None:
                     st.rerun()
                 st.error("パスワードが違います。")
             return
-        t1, t2, t6, t3, t4, t5 = st.tabs(["📅 練習会", "📣 お知らせ", "📖 使い方", "✅ 出欠", "👥 メンバー", "📊 CSV"])
+        t1, t2, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "📣 お知らせ", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
             admin_news(data)
         with t6:
             admin_howto(data)
+        with t7:
+            admin_theme(data)
         with t3:
             admin_attendance(data)
         with t4:
@@ -933,6 +963,27 @@ def admin_howto(data: dict) -> None:
         st.rerun()
 
 
+def admin_theme(data: dict) -> None:
+    st.caption("「使い方」の下に出る「テーマ」の欄を編集できます。「 」で囲んだ言葉にはオレンジのマーカーがつきます。")
+    with st.form("adm_theme_form"):
+        title = st.text_input("タイトル", value=setting(data, "theme_title"))
+        body = st.text_area("本文（改行はそのまま表示・絵文字OK）", value=setting(data, "theme_body"), height=170)
+        save = st.form_submit_button("保存", type="primary", width="stretch")
+    if save:
+        for key, value in (("theme_title", title.strip()), ("theme_body", body.strip())):
+            save_setting(data, key, value)
+        st.session_state["flash"] = "テーマを保存しました。"
+        st.rerun()
+    md("**現在の表示**")
+    with st.container(border=True):
+        md(theme_html(title, body))
+    st.caption("タイトルと本文を両方空にして保存すると、トップには表示されません。")
+    if st.button("初期の文に戻す", key="adm_theme_reset"):
+        _delete("settings", set(THEME_DEFAULT))
+        st.session_state["flash"] = "テーマを初期の文に戻しました。"
+        st.rerun()
+
+
 def admin_attendance(data: dict) -> None:
     if not data["events"]:
         st.info("練習会がありません。")
@@ -1028,6 +1079,7 @@ def main() -> None:
     if not me:
         render_login()
     render_howto(data)
+    render_theme(data)
     render_news(data)
     render_events(data, me)
     render_admin(data)
