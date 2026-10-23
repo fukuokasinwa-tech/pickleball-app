@@ -54,6 +54,14 @@ def get_events():
     conn.close()
     return df
 
+def get_latest_event():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT title, location, capacity, note, time FROM events ORDER BY id DESC LIMIT 1")
+    row = c.fetchone()
+    conn.close()
+    return row
+
 def get_participants_by_event(event_id):
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT nickname, comment FROM participants WHERE event_id = ? ORDER BY id ASC", conn, params=(event_id,))
@@ -79,6 +87,14 @@ def add_event(date, time, title, location, capacity, note):
     c = conn.cursor()
     c.execute("INSERT INTO events (date, time, title, location, capacity, note) VALUES (?, ?, ?, ?, ?, ?)",
               (date, time, title, location, capacity, note))
+    conn.commit()
+    conn.close()
+
+def delete_event(event_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("DELETE FROM events WHERE id = ?", (event_id,))
+    c.execute("DELETE FROM participants WHERE event_id = ?", (event_id,))
     conn.commit()
     conn.close()
 
@@ -136,7 +152,7 @@ st.markdown("""
 
 st.markdown('<div class="main-header">🏓 ピックルボール練習会 案内・参加状況</div>', unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["📅 練習日程・参加申し込み", "⚙️ 管理者画面（日程追加）"])
+tab1, tab2 = st.tabs(["📅 練習日程・参加申し込み", "⚙️ 管理者画面（日程追加・削除）"])
 
 # タブ1: 練習日程・参加者表示・申込一体型画面
 with tab1:
@@ -193,16 +209,25 @@ with tab1:
             
             st.divider()
 
-# タブ2: 管理者用（新しい日程の追加）
+# タブ2: 管理者用（新しい日程の追加・消去）
 with tab2:
     st.subheader("⚙️ 新しい練習会日程の追加")
+    
+    # 直近の入力値を自動取得（無ければ初期値）
+    latest = get_latest_event()
+    default_title = latest[0] if latest else "ピックルボール練習会"
+    default_location = latest[1] if latest else "体育館"
+    default_capacity = int(latest[2]) if latest else 16
+    default_note = latest[3] if latest else "ラケット貸出あり / 参加費500円"
+    default_time = latest[4] if latest else "10:00〜12:00"
+    
     with st.form("add_event_form"):
-        title = st.text_input("タイトル", value="ピックルボール練習会")
-        date = st.text_input("日付", placeholder="例: 11/15(土)")
-        time = st.text_input("時間", placeholder="例: 10:00〜12:00")
-        location = st.text_input("場所", value="体育館")
-        capacity = st.number_input("定員 (名)", value=16, step=1)
-        note = st.text_input("備考", value="ラケット貸出あり / 参加費500円")
+        title = st.text_input("タイトル", value=default_title)
+        date = st.text_input("日付 *", placeholder="例: 11/15(土)")
+        time = st.text_input("時間", value=default_time)
+        location = st.text_input("場所", value=default_location)
+        capacity = st.number_input("定員 (名)", value=default_capacity, step=1)
+        note = st.text_input("備考", value=default_note)
         
         submit_event = st.form_submit_button("日程を追加・公開する")
         if submit_event:
@@ -213,15 +238,5 @@ with tab2:
                 st.success("新しい練習会日程を追加しました！")
                 st.rerun()
 
-    # CSV出力機能
+    # 日程削除機能
     st.write("---")
-    st.subheader("📊 参加者データ出力")
-    all_parts = get_all_participants()
-    if not all_parts.empty:
-        csv = all_parts.to_csv(index=False).encode('utf-8_sig')
-        st.download_button(
-            label="📥 全参加者リスト（CSV）をダウンロード",
-            data=csv,
-            file_name="pickleball_participants.csv",
-            mime="text/csv"
-        )
