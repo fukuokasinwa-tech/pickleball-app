@@ -742,84 +742,46 @@ def delete_event(event_id: str) -> None:
     _delete("events", {event_id})
 
 
-def deletable_row(prefix: str, rec_id: str, line: str, warning: str, on_delete, done: str) -> None:
-    """一覧の1行。「🗑 削除」→ 確認 →「削除する」で on_delete() を実行する。
+def admin_row(prefix: str, rec_id: str, line: str, edit_form, warning: str, on_delete, done: str) -> None:
+    """一覧の1行。「✏️ 編集」でその場に編集フォームを開き、「🗑 削除」は確認してから削除する。
 
-    prefix は "adm_ev" / "adm_news" など。削除した項目が編集欄（{prefix}_sel）で
-    選ばれていたら「＋ 新しく作る」に戻す（編集欄はこの後に描画されるので変更できる）。
+    開いている行は session_state[f"{prefix}_open"] = (rec_id, "edit" | "delete") で覚える。
     """
-    confirm_key = f"{prefix}_confirm"
+    open_key = f"{prefix}_open"
+    rid, mode = st.session_state.get(open_key) or (None, None)
     with st.container(border=True):
-        c1, c2 = st.columns([4, 1.4], vertical_alignment="center")
+        c1, c2, c3 = st.columns([3.2, 1.3, 1.3], vertical_alignment="center")
         c1.write(line)
-        if st.session_state.get(confirm_key) != rec_id:
-            if c2.button("🗑 削除", key=f"{prefix}_del_{rec_id}", width="stretch"):
-                st.session_state[confirm_key] = rec_id
+        if rid != rec_id:
+            if c2.button("✏️ 編集", key=f"{prefix}_edit_{rec_id}", width="stretch"):
+                st.session_state[open_key] = (rec_id, "edit")
                 st.rerun()
+            if c3.button("🗑 削除", key=f"{prefix}_del_{rec_id}", width="stretch"):
+                st.session_state[open_key] = (rec_id, "delete")
+                st.rerun()
+            return
+        if mode == "edit":
+            edit_form()
             return
         st.warning(warning)
         y, no = st.columns(2)
         if y.button("削除する", key=f"{prefix}_del_ok_{rec_id}", type="primary", width="stretch"):
             on_delete()
-            st.session_state.pop(confirm_key, None)
-            if st.session_state.get(f"{prefix}_sel") == rec_id:
-                st.session_state[f"{prefix}_sel"] = "＋ 新しく作る"
+            st.session_state.pop(open_key, None)
             st.session_state["flash"] = done
             st.rerun()
         if no.button("やめる", key=f"{prefix}_del_ng_{rec_id}", width="stretch"):
-            st.session_state.pop(confirm_key, None)
+            st.session_state.pop(open_key, None)
             st.rerun()
 
 
-def admin_event_list(data: dict) -> None:
-    """作成済みの練習会を一覧表示し、確認つきで削除できるようにする。"""
-    md("**登録済みの練習会**")
-    if not data["events"]:
-        st.caption("まだ練習会はありません。")
-        return
-    for e in sorted(data["events"], key=lambda e: e["date"], reverse=True):
-        d = date.fromisoformat(e["date"])
-        n = len(event_rows(data, e["id"], "attending"))
-        past = "（終了）" if e["date"] < today() else ""
-        deletable_row(
-            "adm_ev", e["id"],
-            f"**{d.month}/{d.day}（{WEEKDAYS[d.weekday()][0]}）** {e['title']}　参加{n}人{past}",
-            f"この練習会と、出欠データ（{n}人分）を削除します。元に戻せません。",
-            lambda eid=e["id"]: delete_event(eid),
-            f"{d.month}/{d.day} {e['title']} を削除しました。")
+def close_row(prefix: str) -> None:
+    st.session_state.pop(f"{prefix}_open", None)
 
 
-def admin_news_list(data: dict) -> None:
-    """作成済みのお知らせを一覧表示し、確認つきで削除できるようにする。"""
-    md("**登録済みのお知らせ**")
-    if not data["news"]:
-        st.caption("まだお知らせはありません。")
-        return
-    for i, n in enumerate(data["news"]):
-        d = date.fromisoformat(n["date"]) if n["date"] else None
-        when = f"**{d.month}/{d.day}**　" if d else ""
-        shown = "" if i < 3 else "（過去のお知らせ）"
-        deletable_row(
-            "adm_news", n["id"],
-            f"{when}[{n['category'] or 'その他'}] {n['title']}{shown}",
-            f"お知らせ「{n['title']}」を削除します。元に戻せません。",
-            lambda nid=n["id"]: _delete("news", {nid}),
-            f"お知らせ「{n['title']}」を削除しました。")
-
-
-def admin_events(data: dict) -> None:
-    admin_event_list(data)
-    st.divider()
-    md("**練習会の作成・編集**")
-    opts = ["＋ 新しく作る"] + [e["id"] for e in reversed(data["events"])]
-    labels = {e["id"]: f"{e['date']} {e['title']}" for e in data["events"]}
-    if st.session_state.get("adm_ev_sel") not in opts:
-        st.session_state["adm_ev_sel"] = opts[0]
-    sel = st.selectbox("練習会", opts, format_func=lambda x: labels.get(x, x), key="adm_ev_sel")
-    ev = find(data["events"], sel)
-    # 新規作成時は直近の練習会の内容を初期値にする
-    base = ev or (data["events"][-1] if data["events"] else {})
-    with st.form(f"adm_ev_form_{sel}"):
+def event_form(key: str, ev: dict | None, base: dict) -> None:
+    """練習会の入力フォーム。ev があればその練習会を更新、なければ新規作成。"""
+    with st.form(key):
         d = st.date_input("日付", value=date.fromisoformat(ev["date"]) if ev else now().date())
         title = st.text_input("タイトル", value=base.get("title", "エンジョイDAY"))
         tag = st.text_input("タグ（任意・例: 経験者メイン）", value=base.get("tag", ""))
@@ -830,41 +792,96 @@ def admin_events(data: dict) -> None:
         cap = c3.number_input("定員", min_value=1, max_value=300, value=int(base.get("capacity") or 20))
         fee = c4.text_input("参加費", value=base.get("fee", ""))
         desc = st.text_input("ひとこと（絵文字OK）", value=base.get("description", ""))
-        if st.form_submit_button("保存", type="primary"):
-            values = {"date": d.isoformat(), "title": title.strip() or "練習会", "tag": tag.strip(), "time": time_,
-                      "place": place, "capacity": int(cap), "fee": fee, "description": desc}
-            if ev:
-                _update("events", ev["id"], values)
-            else:
-                _append("events", values | {"id": new_id()})
-            st.session_state["flash"] = "練習会を保存しました。"
-            st.rerun()
+        b1, b2 = st.columns(2)
+        save = b1.form_submit_button("保存" if ev else "作成する", type="primary", width="stretch")
+        cancel = b2.form_submit_button("閉じる", width="stretch") if ev else False
+    if cancel:
+        close_row("adm_ev")
+        st.rerun()
+    if save:
+        values = {"date": d.isoformat(), "title": title.strip() or "練習会", "tag": tag.strip(), "time": time_,
+                  "place": place, "capacity": int(cap), "fee": fee, "description": desc}
+        if ev:
+            _update("events", ev["id"], values)
+            close_row("adm_ev")
+            st.session_state["flash"] = "練習会を更新しました。"
+        else:
+            _append("events", values | {"id": new_id()})
+            st.session_state["flash"] = "練習会を作成しました。"
+        st.rerun()
+
+
+def news_form(key: str, n: dict | None) -> None:
+    """お知らせの入力フォーム。n があればそのお知らせを更新、なければ新規作成。"""
+    n0 = n or {}
+    with st.form(key):
+        d = st.date_input("日付", value=date.fromisoformat(n0["date"]) if n0.get("date") else now().date())
+        cats = list(NEWS_CATEGORIES)
+        cat = st.selectbox("種類", cats, index=cats.index(n0["category"]) if n0.get("category") in cats else 0)
+        title = st.text_input("タイトル（絵文字OK）", value=n0.get("title", ""))
+        body = st.text_area("本文", value=n0.get("body", ""), height=160)
+        b1, b2 = st.columns(2)
+        save = b1.form_submit_button("保存" if n else "作成する", type="primary", width="stretch")
+        cancel = b2.form_submit_button("閉じる", width="stretch") if n else False
+    if cancel:
+        close_row("adm_news")
+        st.rerun()
+    if save:
+        if not title.strip():
+            st.warning("タイトルを入力してください。")
+            return
+        values = {"date": d.isoformat(), "category": cat, "title": title.strip(), "body": body}
+        if n:
+            _update("news", n["id"], values)
+            close_row("adm_news")
+            st.session_state["flash"] = "お知らせを更新しました。"
+        else:
+            _append("news", values | {"id": new_id()})
+            st.session_state["flash"] = "お知らせを作成しました。"
+        st.rerun()
+
+
+def admin_events(data: dict) -> None:
+    md("**登録済みの練習会**")
+    if not data["events"]:
+        st.caption("まだ練習会はありません。")
+    for e in sorted(data["events"], key=lambda e: e["date"], reverse=True):
+        d = date.fromisoformat(e["date"])
+        n = len(event_rows(data, e["id"], "attending"))
+        past = "（終了）" if e["date"] < today() else ""
+        admin_row(
+            "adm_ev", e["id"],
+            f"**{d.month}/{d.day}（{WEEKDAYS[d.weekday()][0]}）** {e['title']}　参加{n}人{past}",
+            lambda e=e: event_form(f"adm_ev_form_{e['id']}", e, e),
+            f"この練習会と、出欠データ（{n}人分）を削除します。元に戻せません。",
+            lambda eid=e["id"]: delete_event(eid),
+            f"{d.month}/{d.day} {e['title']} を削除しました。")
+    st.divider()
+    md("**＋ 新しい練習会を作る**")
+    st.caption("直近の練習会の内容を初期値にしています。")
+    # 新規作成時は直近の練習会の内容を初期値にする
+    latest = max(data["events"], key=lambda e: e["date"]) if data["events"] else {}
+    event_form("adm_ev_form_new", None, latest)
 
 
 def admin_news(data: dict) -> None:
-    admin_news_list(data)
+    md("**登録済みのお知らせ**")
+    if not data["news"]:
+        st.caption("まだお知らせはありません。")
+    for i, n in enumerate(data["news"]):
+        d = date.fromisoformat(n["date"]) if n["date"] else None
+        when = f"**{d.month}/{d.day}**　" if d else ""
+        shown = "" if i < 3 else "（過去のお知らせ）"
+        admin_row(
+            "adm_news", n["id"],
+            f"{when}[{n['category'] or 'その他'}] {n['title']}{shown}",
+            lambda n=n: news_form(f"adm_news_form_{n['id']}", n),
+            f"お知らせ「{n['title']}」を削除します。元に戻せません。",
+            lambda nid=n["id"]: _delete("news", {nid}),
+            f"お知らせ「{n['title']}」を削除しました。")
     st.divider()
-    md("**お知らせの作成・編集**")
-    opts = ["＋ 新しく作る"] + [n["id"] for n in data["news"]]
-    labels = {n["id"]: f"{n['date']} {n['title']}" for n in data["news"]}
-    if st.session_state.get("adm_news_sel") not in opts:
-        st.session_state["adm_news_sel"] = opts[0]
-    sel = st.selectbox("お知らせ", opts, format_func=lambda x: labels.get(x, x), key="adm_news_sel")
-    n = find(data["news"], sel) or {}
-    with st.form(f"adm_news_form_{sel}"):
-        d = st.date_input("日付", value=date.fromisoformat(n["date"]) if n.get("date") else now().date())
-        cats = list(NEWS_CATEGORIES)
-        cat = st.selectbox("種類", cats, index=cats.index(n["category"]) if n.get("category") in cats else 0)
-        title = st.text_input("タイトル（絵文字OK）", value=n.get("title", ""))
-        body = st.text_area("本文", value=n.get("body", ""), height=160)
-        if st.form_submit_button("保存", type="primary") and title.strip():
-            values = {"date": d.isoformat(), "category": cat, "title": title.strip(), "body": body}
-            if n:
-                _update("news", n["id"], values)
-            else:
-                _append("news", values | {"id": new_id()})
-            st.session_state["flash"] = "お知らせを保存しました。"
-            st.rerun()
+    md("**＋ 新しいお知らせを作る**")
+    news_form("adm_news_form_new", None)
 
 
 def admin_attendance(data: dict) -> None:
