@@ -435,13 +435,13 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .st-key-hero_actions [data-testid="stMarkdown"], .st-key-hero_actions [data-testid="stMarkdownContainer"] { margin: 0 !important; }
 @media (max-width: 480px) {
   /* スマホでも「名前・家族を追加・メンバー人数」が1行に並ぶよう小さめにする（入りきらなければ折り返す） */
-  .st-key-hero { padding-left: 16px !important; padding-right: 16px !important; }
-  .st-key-hero_actions { gap: 6px !important; }
+  .st-key-hero { padding-left: 12px !important; padding-right: 12px !important; }
+  .st-key-hero_actions { gap: 5px !important; }
   .st-key-hero_actions > div { flex: 0 0 auto !important; width: auto !important; }
   .st-key-hero_actions button div:has(> span > [data-testid="stIconMaterial"]) { display: none; }  /* ⌄ の矢印 */
-  .st-key-hero .st-key-hero_actions button { padding: 5px 10px !important; min-height: 0 !important; }
-  .st-key-hero .st-key-hero_actions button p { font-size: .82rem !important; white-space: nowrap; }
-  .pk-count-chip { padding: 5px 10px; font-size: .82rem; }
+  .st-key-hero .st-key-hero_actions button { padding: 5px 8px !important; min-height: 0 !important; }
+  .st-key-hero .st-key-hero_actions button p { font-size: .78rem !important; white-space: nowrap; }
+  .pk-count-chip { padding: 5px 8px; font-size: .78rem; }
   .pk-count-chip b { font-size: 1em; }
 }
 
@@ -696,7 +696,7 @@ def render_hero(data: dict, me: dict | None) -> None:
                         st.session_state["flash"] = f"{name.strip()} さんを追加しました！"
                         st.rerun()
             # 登録メンバーの人数（家族として追加した人も含む）
-            md(f'<div class="pk-count-chip">👥 メンバー<b>{len(data["members"])}</b>人</div>')
+            md(f'<div class="pk-count-chip">👥 全登録メンバー<b>{len(data["members"])}</b>人</div>')
 
 
 def render_login() -> None:
