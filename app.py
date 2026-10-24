@@ -44,8 +44,8 @@ SHEETS = {
 # 「使い方はかんたん！」の初期の文。管理者メニューで書き換えると settings シートに保存される
 HOWTO_DEFAULT = {
     "howto_title": "📖 使い方はかんたん！",
-    "howto_steps": "お名前を登録\n行ける日の「🏓 参加する」をタップ\n予定が変わったら、もう一度タップで不参加に",
-    "howto_note": "別のスマホやブラウザで開いても、同じお名前でログインできます。右上の × でこの案内を閉じられます。",
+    "howto_steps": "お名前と好きな数字を登録\n行ける日の「🏓 参加する」をタップ\n予定が変わったら、もう一度タップで不参加に",
+    "howto_note": "別のスマホやブラウザで開いても、同じお名前と数字でログインできます。右上の × でこの案内を閉じられます。",
 }
 # 「テーマ」欄の初期の文。管理者メニューで書き換えると settings シートに保存される
 THEME_DEFAULT = {
@@ -327,14 +327,28 @@ def login_token(member: dict) -> str:
     return hashlib.sha256(f"{key}:{member['id']}:{member['pin_hash']}".encode()).hexdigest()[:16]
 
 
-def login_or_register(name: str, source: str, referrer: str) -> tuple[str, dict | None]:
-    """お名前だけでログイン。登録済みならその人として、未登録なら新規登録する。"""
+def pin_hash(member_id: str, pin: str) -> str:
+    return hashlib.sha256(f"{member_id}:{pin}".encode()).hexdigest()
+
+
+def login_or_register(name: str, pin: str, source: str, referrer: str) -> tuple[str, dict | None]:
+    """お名前と好きな数字でログイン。未登録なら新規登録する。
+
+    'ok' / 'new' / 'badpin'（数字ちがい）/ 'family'（家族として登録済み）を返す。
+    """
     data = _fresh_data()
     m = next((m for m in data["members"] if norm(m["name"]) == norm(name)), None)
     if m:
-        return ("family", None) if m["family_of"] else ("ok", m)
+        if m["family_of"]:
+            return "family", None
+        if not m["pin_hash"]:
+            # 数字なしで登録済みの人（数字機能が無かった頃の登録・管理者のリセット後）：今回の数字を設定
+            h = pin_hash(m["id"], pin)
+            _update("members", m["id"], {"pin_hash": h})
+            return "ok", m | {"pin_hash": h}
+        return ("ok", m) if m["pin_hash"] == pin_hash(m["id"], pin) else ("badpin", None)
     mid = new_id()
-    m = {"id": mid, "name": name.strip(), "pin_hash": "", "family_of": "",
+    m = {"id": mid, "name": name.strip(), "pin_hash": pin_hash(mid, pin), "family_of": "",
          "source": source, "referrer": referrer.strip() if source == "友人・知人の紹介" else "",
          "created_at": now().isoformat(timespec="seconds")}
     _append("members", m)
@@ -417,7 +431,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 
 /* ---- 白カード（レベル・使い方・ログイン） ---- */
-.pk-card, .st-key-howto, .st-key-theme, .st-key-login {
+.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-setpin {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
@@ -665,25 +679,54 @@ def render_hero(data: dict, me: dict | None) -> None:
 
 def render_login() -> None:
     with st.container(key="login"):
-        md('<div class="pk-login-title">👋 お名前を登録</div>')
-        st.caption("一度登録すると、このスマホ（ブラウザ）では次回から自動でログインします。別のスマホでは同じお名前を入れてください。")
+        md('<div class="pk-login-title">👋 お名前と好きな数字を登録</div>')
+        st.caption("一度登録すると、このスマホ（ブラウザ）では次回から自動でログインします。"
+                   "別のスマホでは、同じお名前と数字を入れてください。")
         name = st.text_input("お名前（表示名）", max_chars=20, placeholder="例: のり")
+        pin = st.text_input("好きな数字（4〜8桁）", max_chars=8, type="password", placeholder="例: 0123",
+                            help="同じ名前の人と見分けるための数字です。忘れたときは管理者がリセットできます。")
         with st.expander("はじめての方はこちらも教えてください"):
             source = st.selectbox("YAME PICKを知ったきっかけ", ["（選択しない）"] + SOURCES)
             referrer = st.text_input("紹介してくれた人", max_chars=20) if source == "友人・知人の紹介" else ""
         if st.button("はじめる 🏓", type="primary", width="stretch"):
+            pin = pin.strip()
             if not name.strip():
                 st.warning("お名前を入力してください。")
+            elif not (pin.isdigit() and 4 <= len(pin) <= 8):
+                st.warning("好きな数字を4〜8桁で入力してください。")
             else:
                 src = "" if source.startswith("（") else source
-                res, m = login_or_register(name, src, referrer)
+                res, m = login_or_register(name, pin, src, referrer)
                 if res in ("ok", "new"):
                     sign_in(m)
                     st.session_state["flash"] = ("ようこそ！登録しました 🎉" if res == "new"
                                                  else f"おかえりなさい、{m['name']} さん！")
                     st.rerun()
+                elif res == "badpin":
+                    st.error(f"「{name.strip()}」さんの数字がちがいます。"
+                             "同じ名前の別の方は、「田中（八女）」のように少し変えた名前で登録してください。"
+                             "数字を忘れたときは管理者に「数字のリセット」をお願いしてください。")
                 else:
                     st.error("この名前はご家族として登録されています。登録した方のスマホから出欠を入れてください。")
+
+
+def render_set_pin(me: dict) -> None:
+    """数字なしでログイン中の人に、好きな数字の設定をお願いする。"""
+    with st.container(key="setpin"):
+        md('<div class="pk-login-title">🔢 好きな数字を設定してください</div>')
+        st.caption("同じ名前の人と見分けるための数字です。別のスマホでログインするときに使います。")
+        c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
+        pin = c1.text_input("好きな数字（4〜8桁）", max_chars=8, type="password", placeholder="例: 0123", key="setpin_pin")
+        if c2.button("設定する", type="primary", width="stretch", key="setpin_btn"):
+            pin = pin.strip()
+            if not (pin.isdigit() and 4 <= len(pin) <= 8):
+                st.warning("好きな数字を4〜8桁で入力してください。")
+                return
+            h = pin_hash(me["id"], pin)
+            _update("members", me["id"], {"pin_hash": h})
+            sign_in(me | {"pin_hash": h})  # 数字が変わるとログイン情報も変わるので保存し直す
+            st.session_state["flash"] = "好きな数字を設定しました！"
+            st.rerun()
 
 
 def setting(data: dict, key: str) -> str:
@@ -833,7 +876,7 @@ def render_buttons(data: dict, ev: dict, person: dict | None, show_name: bool, f
     if not go:
         return
     if person is None:
-        st.session_state["flash_warn"] = "まずは上の「お名前を登録」からログインしてください 🙏"
+        st.session_state["flash_warn"] = "まずは上の「お名前と好きな数字を登録」からログインしてください 🙏"
         st.rerun()
     res = set_status(ev["id"], pid, "absent" if s == "attending" else "attending")
     if res == "full":
@@ -1173,11 +1216,18 @@ def admin_attendance(data: dict) -> None:
 
 
 def admin_members(data: dict) -> None:
+    st.caption("好きな数字を忘れた方は「数字をリセット」してください。次にログインするときに新しい数字を設定できます。")
     members = sorted(data["members"], key=lambda m: m["created_at"])
     for m in members:
-        c1, c3 = st.columns([5, 1])
+        c1, c2, c3 = st.columns([3.4, 1.8, 0.8], vertical_alignment="center")
         fam = f"（{find(data['members'], m['family_of'])['name']}さんの家族）" if m["family_of"] and find(data["members"], m["family_of"]) else ""
-        c1.write(f"{m['name']}{fam}　参加{play_count(data, m['id'])}回")
+        pin_note = "" if m["family_of"] else ("　🔢数字あり" if m["pin_hash"] else "　（数字未設定）")
+        c1.write(f"{m['name']}{fam}　参加{play_count(data, m['id'])}回{pin_note}")
+        # 数字を忘れた人用：空にすると、次のログイン時に新しい数字を設定できる
+        if m["pin_hash"] and c2.button("数字をリセット", key=f"adm_pin_{m['id']}", width="stretch"):
+            _update("members", m["id"], {"pin_hash": ""})
+            st.session_state["flash"] = f"{m['name']} さんの数字をリセットしました。次のログインで新しい数字を設定できます。"
+            st.rerun()
         if c3.button("🗑", key=f"adm_memdel_{m['id']}"):
             _delete("attendance", {m["id"]}, col="member_id")
             _delete("members", {m["id"]})
@@ -1248,6 +1298,8 @@ def render_page(data: dict) -> None:
         st.toast(msg, icon="⚠️")
     if not me:
         render_login()
+    elif not me["pin_hash"] and not me["family_of"]:
+        render_set_pin(me)
     render_howto(data)
     render_theme(data)
     render_news(data)
