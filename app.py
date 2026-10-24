@@ -424,7 +424,27 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-title { color: #fff; font-weight: 900; font-size: 2.9rem; line-height: 1.12; margin-top: 10px; }
 .pk-title .y { color: var(--brand); }
 .pk-sub { color: #cfcfcf; margin-top: 14px; font-weight: 700; }
-.st-key-hero_actions { position: relative; z-index: 1; margin-top: 6px; }
+.st-key-hero_actions { position: relative; z-index: 1; margin-top: 6px; align-items: center; }
+.pk-count-chip {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  background: #222; color: #fff; border: 2px solid #555; border-radius: 999px;
+  padding: 6px 14px; font-weight: 800; font-size: .9rem; line-height: 1.4;
+}
+.pk-count-chip b { color: var(--brand); font-size: 1.05rem; }
+.st-key-hero_actions > div { align-self: center; }
+.st-key-hero_actions [data-testid="stMarkdown"], .st-key-hero_actions [data-testid="stMarkdownContainer"] { margin: 0 !important; }
+@media (max-width: 480px) {
+  /* スマホでも「名前・家族を追加・メンバー人数」が1行に並ぶよう小さめにする（入りきらなければ折り返す） */
+  .st-key-hero { padding-left: 16px !important; padding-right: 16px !important; }
+  .st-key-hero_actions { gap: 6px !important; }
+  .st-key-hero_actions > div { flex: 0 0 auto !important; width: auto !important; }
+  .st-key-hero_actions button div:has(> span > [data-testid="stIconMaterial"]) { display: none; }  /* ⌄ の矢印 */
+  .st-key-hero .st-key-hero_actions button { padding: 5px 10px !important; min-height: 0 !important; }
+  .st-key-hero .st-key-hero_actions button p { font-size: .82rem !important; white-space: nowrap; }
+  .pk-count-chip { padding: 5px 10px; font-size: .82rem; }
+  .pk-count-chip b { font-size: 1em; }
+}
+
 .st-key-hero button {
   background: #222 !important; color: #fff !important; border: 2px solid #555 !important;
   border-radius: 999px !important; font-weight: 800 !important; padding: 6px 18px !important;
@@ -650,14 +670,14 @@ def render_hero(data: dict, me: dict | None) -> None:
         if not me:
             return
         with st.container(key="hero_actions", horizontal=True, gap="small"):
-            with st.popover(f"🟠 {me['name']}　変更"):
+            with st.popover(f"🟠 {me['name']} 変更"):
                 st.write(f"**{me['name']}** さんでログイン中")
                 st.caption("別の人に切り替えるときはログアウトしてください。")
                 if st.button("ログアウト", key="logout"):
                     sign_out()
                     st.rerun()
             fam = family_of(data, me["id"])
-            with st.popover("👨‍👩‍👧 家族 を追加"):
+            with st.popover("👨‍👩‍👧 家族を追加"):
                 st.caption("お子さんやご家族の分も、このスマホから出欠を登録できます。")
                 for f in fam:
                     c1, c2 = st.columns([3, 1])
@@ -675,6 +695,8 @@ def render_hero(data: dict, me: dict | None) -> None:
                     else:
                         st.session_state["flash"] = f"{name.strip()} さんを追加しました！"
                         st.rerun()
+            # 登録メンバーの人数（家族として追加した人も含む）
+            md(f'<div class="pk-count-chip">👥 メンバー<b>{len(data["members"])}</b>人</div>')
 
 
 def render_login() -> None:
