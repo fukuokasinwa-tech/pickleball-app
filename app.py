@@ -912,9 +912,47 @@ def render_events(data: dict, me: dict | None) -> None:
 # 管理者メニュー
 # ---------------------------------------------------------------------------
 
-def render_admin(data: dict) -> None:
+def admin_member_ids(data: dict) -> set[str]:
+    """管理者に指定されたメンバーのID。
+
+    管理者メニューで指定した人（settings シートの admin_ids）に加えて、
+    Secrets の admin_members に書いた名前の人も管理者として扱う（誰も入れなくなったときの予備）。
+    """
+    row = find(data["settings"], "admin_ids")
+    ids = {i for i in (row["value"] if row else "").split(",") if i}
+    try:
+        names = st.secrets.get("admin_members", [])
+    except FileNotFoundError:
+        names = []
+    if isinstance(names, str):
+        names = names.split(",")
+    wanted = {norm(n) for n in names if str(n).strip()}
+    ids |= {m["id"] for m in data["members"] if norm(m["name"]) in wanted}
+    return {i for i in ids if find(data["members"], i)}  # 削除されたメンバーは除く
+
+
+def can_see_admin(data: dict, me: dict | None) -> bool:
+    admins = admin_member_ids(data)
+    # 管理者がまだ1人もいないときは、最初の設定ができるよう全員に表示する
+    return not admins or (me is not None and me["id"] in admins)
+
+
+def set_admin(data: dict, member_id: str, on: bool) -> None:
+    row = find(data["settings"], "admin_ids")
+    ids = [i for i in (row["value"] if row else "").split(",") if i and i != member_id]
+    if on:
+        ids.append(member_id)
+    save_setting(data, "admin_ids", ",".join(ids))
+
+
+def render_admin(data: dict, me: dict | None) -> None:
+    if not can_see_admin(data, me):
+        return
     md('<div class="pk-h">ADMIN</div>')
     with st.expander("🔧 管理者メニュー"):
+        if not admin_member_ids(data):
+            st.info("管理者がまだ決まっていないため、全員に表示されています。"
+                    "ログイン後「👥 メンバー」で「👑 管理者にする」を押すと、管理者の人にだけ表示されるようになります。")
         if not st.session_state.get("is_admin"):
             pw = st.text_input("管理者パスワード", type="password", key="admin_pw")
             if st.button("ログイン", key="admin_login"):
@@ -1222,13 +1260,27 @@ def admin_attendance(data: dict) -> None:
 
 
 def admin_members(data: dict) -> None:
+    st.caption("👑 管理者にした人がログインしているときだけ、画面下に管理者メニューが表示されます"
+               "（管理者が1人もいないときは全員に表示）。")
     st.caption("好きな数字を忘れた方は「数字をリセット」してください。次にログインするときに新しい数字を設定できます。")
+    admins = admin_member_ids(data)
     members = sorted(data["members"], key=lambda m: m["created_at"])
     for m in members:
-        c1, c2, c3 = st.columns([3.4, 1.8, 0.8], vertical_alignment="center")
+        c1, c2, c4, c3 = st.columns([3, 1.6, 1.8, 0.7], vertical_alignment="center")
         fam = f"（{find(data['members'], m['family_of'])['name']}さんの家族）" if m["family_of"] and find(data["members"], m["family_of"]) else ""
         pin_note = "" if m["family_of"] else ("　🔢数字あり" if m["pin_hash"] else "　（数字未設定）")
-        c1.write(f"{m['name']}{fam}　参加{play_count(data, m['id'])}回{pin_note}")
+        crown = "👑 " if m["id"] in admins else ""
+        c1.write(f"{crown}{m['name']}{fam}　参加{play_count(data, m['id'])}回{pin_note}")
+        if not m["family_of"]:  # 家族は自分でログインしないので管理者にはできない
+            if m["id"] in admins:
+                if c4.button("管理者を外す", key=f"adm_role_{m['id']}", width="stretch"):
+                    set_admin(data, m["id"], False)
+                    st.session_state["flash"] = f"{m['name']} さんを管理者から外しました。"
+                    st.rerun()
+            elif c4.button("👑 管理者にする", key=f"adm_role_{m['id']}", width="stretch"):
+                set_admin(data, m["id"], True)
+                st.session_state["flash"] = f"{m['name']} さんを管理者にしました。"
+                st.rerun()
         # 数字を忘れた人用：空にすると、次のログイン時に新しい数字を設定できる
         if m["pin_hash"] and c2.button("数字をリセット", key=f"adm_pin_{m['id']}", width="stretch"):
             _update("members", m["id"], {"pin_hash": ""})
@@ -1314,7 +1366,7 @@ def render_page(data: dict) -> None:
     render_theme(data)
     render_news(data)
     render_events(data, me)
-    render_admin(data)
+    render_admin(data, me)
 
 
 if __name__ == "__main__":
