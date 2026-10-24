@@ -39,6 +39,7 @@ SHEETS = {
     "events": ["id", "date", "title", "tag", "time", "place", "capacity", "fee", "description"],
     "attendance": ["id", "event_id", "member_id", "status", "updated_at"],
     "news": ["id", "date", "category", "title", "body"],
+    "gallery": ["id", "date", "url", "caption"],  # 写真・動画（Instagram などのリンク）
     "settings": ["id", "value"],  # id = 設定名（howto_title など）
 }
 # 「使い方はかんたん！」の初期の文。管理者メニューで書き換えると settings シートに保存される
@@ -197,6 +198,7 @@ def _fresh_data() -> dict:
             e["capacity"] = 0
     data["events"].sort(key=lambda e: e["date"])
     data["news"].sort(key=lambda n: n["date"], reverse=True)
+    data["gallery"].sort(key=lambda g: g["date"], reverse=True)
     return data
 
 
@@ -538,6 +540,18 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 [class*="st-key-evbtn_"] button:disabled { background: #e6e6e6 !important; color: #999 !important; box-shadow: none; }
 .ev-hint { color: var(--sub); font-size: .85rem; font-weight: 700; text-align: center; margin: 4px 0 22px; }
 .ev-spacer { height: 14px; }
+
+/* ---- ギャラリー ---- */
+[class*="st-key-gal_"] {
+  background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 10px;
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 22px 0;
+}
+[class*="st-key-gal_"] iframe { border-radius: 12px; }
+.pk-gal-cap { font-weight: 800; line-height: 1.6; padding: 0 4px; }
+.pk-gal-date {
+  display: inline-block; background: var(--brand); border: 2px solid var(--ink); border-radius: 999px;
+  padding: 0 10px; margin-right: 8px; font-size: .85rem;
+}
 .st-key-login_js, div:has(> .st-key-login_js) { display: none !important; }
 
 /* ---- 管理者メニューのタブ：スマホでも全部見えるよう折り返して並べる ---- */
@@ -803,6 +817,57 @@ def render_news(data: dict) -> None:
                 md(card(n))
 
 
+def media_of(url: str) -> tuple[str, str] | None:
+    """貼られたリンクから (種類, 表示用URL) を作る。対応していないリンクは None。"""
+    url = (url or "").strip()
+    if m := re.search(r"instagram\.com/(?:[\w.]+/)?(p|reels?|tv)/([\w-]+)", url):
+        kind = "p" if m[1] == "p" else "reel"
+        return f"instagram_{kind}", f"https://www.instagram.com/{kind}/{m[2]}/embed/"
+    if m := re.search(r"(?:youtube\.com/(?:watch\?v=|shorts/|live/)|youtu\.be/)([\w-]{6,})", url):
+        return "youtube", f"https://www.youtube.com/watch?v={m[1]}"
+    if m := re.search(r"drive\.google\.com/(?:file/d/|open\?id=|uc\?id=)([\w-]+)", url):
+        return "image", f"https://drive.google.com/thumbnail?id={m[1]}&sz=w1200"
+    if re.match(r"https://\S+\.(?:jpe?g|png|webp|gif)(?:\?\S*)?$", url, re.I):
+        return "image", url
+    return None
+
+
+def render_media(url: str) -> None:
+    media = media_of(url)
+    if media is None:
+        st.caption("（表示できないリンクです）")
+        return
+    kind, src = media
+    if kind.startswith("instagram"):
+        # Instagram の埋め込みは高さを自動で合わせられないので、投稿とリールで目安の高さにする
+        st.iframe(src, height=720 if kind == "instagram_reel" else 600)
+    elif kind == "youtube":
+        st.video(src)
+    else:
+        st.image(src, width="stretch")
+
+
+def render_gallery(data: dict) -> None:
+    if not data["gallery"]:
+        return
+    md('<div class="pk-h">GALLERY</div>')
+
+    def item(g: dict) -> None:
+        d = date.fromisoformat(g["date"]) if g["date"] else None
+        with st.container(key=f"gal_{g['id']}"):
+            head = f'<span class="pk-gal-date">{d.month}/{d.day}</span>' if d else ""
+            if head or g["caption"]:
+                md(f'<div class="pk-gal-cap">{head}{esc(g["caption"])}</div>')
+            render_media(g["url"])
+
+    for g in data["gallery"][:3]:
+        item(g)
+    if len(data["gallery"]) > 3:
+        with st.expander(f"過去の写真・動画（{len(data['gallery']) - 3}件）"):
+            for g in data["gallery"][3:]:
+                item(g)
+
+
 def pill(data: dict, m: dict, ev: dict, me: dict | None) -> str:
     if is_first_time(data, m["id"], ev):
         src = m["source"] + (f"（{m['referrer']}）" if m["referrer"] else "")
@@ -962,12 +1027,14 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t2, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "📣 お知らせ", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
+        t1, t2, t8, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "📣 お知らせ", "📸 ギャラリー", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
             admin_news(data)
+        with t8:
+            admin_gallery(data)
         with t6:
             admin_howto(data)
         with t7:
@@ -1179,6 +1246,59 @@ def admin_news(data: dict) -> None:
     news_form("adm_news_form_new", None)
 
 
+def gallery_form(key: str, g: dict | None) -> None:
+    """写真・動画の入力フォーム。g があれば更新、なければ新規掲載。"""
+    g0 = g or {}
+    with st.form(key):
+        d = st.date_input("日付", value=date.fromisoformat(g0["date"]) if g0.get("date") else now().date())
+        url = st.text_input("リンク（Instagram の投稿・リール／YouTube／Googleドライブの写真）", value=g0.get("url", ""),
+                            placeholder="https://www.instagram.com/p/xxxxxxxx/")
+        caption = st.text_input("ひとこと（任意・絵文字OK）", value=g0.get("caption", ""))
+        b1, b2 = st.columns(2)
+        save = b1.form_submit_button("保存" if g else "掲載する", type="primary", width="stretch")
+        cancel = b2.form_submit_button("閉じる", width="stretch") if g else False
+    if cancel:
+        close_row("adm_gal")
+        st.rerun()
+    if save:
+        if media_of(url) is None:
+            st.warning("Instagram の投稿・リール、YouTube、Googleドライブの写真のリンクを貼ってください。")
+            return
+        values = {"date": d.isoformat(), "url": url.strip(), "caption": caption.strip()}
+        if g:
+            _update("gallery", g["id"], values)
+            close_row("adm_gal")
+            st.session_state["flash"] = "写真・動画を更新しました。"
+        else:
+            _append("gallery", values | {"id": new_id()})
+            st.session_state["flash"] = "写真・動画を掲載しました。"
+        st.rerun()
+
+
+def admin_gallery(data: dict) -> None:
+    st.caption("Instagram の投稿を開き「…」→「リンクをコピー」したURLを貼ると、トップの GALLERY に表示されます。"
+               "Instagram のアカウントは「公開」にしておいてください（非公開だと表示されません）。")
+    md("**掲載中の写真・動画**")
+    if not data["gallery"]:
+        st.caption("まだ掲載していません。")
+    for i, g in enumerate(data["gallery"]):
+        d = date.fromisoformat(g["date"]) if g["date"] else None
+        kind = (media_of(g["url"]) or ("?", ""))[0]
+        label = {"instagram_p": "📷 Instagram", "instagram_reel": "🎬 リール", "youtube": "▶️ YouTube", "image": "🖼 写真"}.get(kind, "❓")
+        when = f"**{d.month}/{d.day}**　" if d else ""
+        shown = "" if i < 3 else "（過去の写真・動画）"
+        admin_row(
+            "adm_gal", g["id"],
+            f"{when}{label}　{g['caption'] or g['url']}{shown}",
+            lambda g=g: gallery_form(f"adm_gal_form_{g['id']}", g),
+            "この写真・動画をギャラリーから外します（Instagram の投稿そのものは消えません）。",
+            lambda gid=g["id"]: _delete("gallery", {gid}),
+            "ギャラリーから外しました。")
+    st.divider()
+    md("**＋ 新しく掲載する**")
+    gallery_form("adm_gal_form_new", None)
+
+
 def admin_howto(data: dict) -> None:
     st.caption("トップの「使い方はかんたん！」の案内文を編集できます。手順は1行に1つ書くと、自動で 1, 2, 3… と番号がつきます。")
     with st.form("adm_howto_form"):
@@ -1366,6 +1486,7 @@ def render_page(data: dict) -> None:
     render_theme(data)
     render_news(data)
     render_events(data, me)
+    render_gallery(data)
     render_admin(data, me)
 
 
