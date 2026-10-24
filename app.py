@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import base64
+import calendar
 import csv
 import hashlib
 import html
@@ -554,6 +555,57 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .ev-hint { color: var(--sub); font-size: .85rem; font-weight: 700; text-align: center; margin: 4px 0 22px; }
 .ev-spacer { height: 14px; }
 
+/* ---- カレンダー ---- */
+.st-key-cal_nav { justify-content: space-between; margin-bottom: 8px; }
+.st-key-cal_nav button {
+  border: 2px solid var(--ink) !important; border-radius: 999px !important; background: #fff !important;
+  font-weight: 800 !important; padding: 4px 14px !important; min-height: 0 !important;
+}
+.cal-title { font-size: 1.35rem; font-weight: 900; text-align: center; }
+.cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; background: #fff;
+  border: 3px solid var(--ink); border-radius: 18px; padding: 8px;
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 14px 0;
+}
+.cal-wd { text-align: center; font-weight: 900; font-size: .8rem; padding: 2px 0 4px; color: var(--sub); }
+.cal-wd.sun, .cal-num.sun { color: #E60012; }
+.cal-wd.sat, .cal-num.sat { color: #1565C0; }
+.cal-day { min-height: 58px; border-radius: 8px; padding: 3px 3px 4px; background: #F7F7F3; overflow: hidden; }
+.cal-day.out { opacity: .35; }
+.cal-day.has { background: #FFF1DE; }
+.cal-day.today { outline: 2.5px solid var(--ink); outline-offset: -2px; }
+.cal-num { font-weight: 900; font-size: .85rem; line-height: 1.2; }
+.cal-ev {
+  margin-top: 2px; background: var(--brand); color: var(--ink); border-radius: 5px; padding: 1px 3px;
+  font-size: .62rem; font-weight: 800; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all;
+}
+.cal-ev.past { background: #ddd; color: #777; }
+.cal-list { margin: 0 8px 10px 0; }
+.cal-row {
+  display: flex; gap: 12px; align-items: center; background: #fff; border: 2.5px solid var(--ink);
+  border-radius: 14px; padding: 8px 12px; margin-bottom: 8px;
+}
+.cal-row.past { opacity: .55; }
+.cal-row-date {
+  flex: none; width: 58px; text-align: center; background: var(--brand); border: 2px solid var(--ink);
+  border-radius: 10px; font-weight: 900; font-size: 1.05rem; line-height: 1.2; padding: 4px 0;
+}
+.cal-row-date span { display: block; font-size: .7rem; }
+.cal-row-body { font-weight: 700; line-height: 1.5; min-width: 0; }
+.cal-row-sub { color: var(--sub); font-size: .85rem; }
+.cal-row-sub .nw { white-space: nowrap; }
+.cal-chip {
+  display: inline-block; margin-left: 6px; border: 2px solid var(--ink); border-radius: 999px;
+  padding: 0 8px; font-size: .72rem; font-weight: 900; background: #fff; vertical-align: middle;
+}
+.cal-chip.full { background: var(--red); color: #fff; }
+.cal-chip.end { background: #eee; color: #777; border-color: #bbb; }
+@media (min-width: 600px) {
+  .cal-day { min-height: 74px; }
+  .cal-ev { font-size: .72rem; }
+}
+
 /* ---- ギャラリー ---- */
 [class*="st-key-gal_"] {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 10px;
@@ -1044,6 +1096,76 @@ def render_buttons(data: dict, ev: dict, person: dict | None, show_name: bool, f
     else:
         st.session_state["flash"] = f"{person['name']} さんの参加を登録しました！🏓"
     st.rerun()
+
+
+def start_time(text: str) -> str:
+    """「09:00〜11:00」→「9:00」。読み取れなければ空。"""
+    m = re.match(r"\s*(\d{1,2}):(\d{2})", text or "")
+    return f"{int(m[1])}:{m[2]}" if m else ""
+
+
+def render_calendar(data: dict) -> None:
+    """練習会を月ごとのカレンダーと一覧で見せる。"""
+    md('<div class="pk-h">CALENDAR</div>')
+    ym = st.session_state.get("cal_ym") or today()[:7]
+    y, m = map(int, ym.split("-"))
+    with st.container(key="cal_nav", horizontal=True, vertical_alignment="center"):
+        if st.button("◀ 前の月", key="cal_prev"):
+            st.session_state["cal_ym"] = f"{y - (m == 1)}-{(m - 2) % 12 + 1:02d}"
+            st.rerun()
+        md(f'<div class="cal-title">{y}年 {m}月</div>')
+        if st.button("次の月 ▶", key="cal_next"):
+            st.session_state["cal_ym"] = f"{y + (m == 12)}-{m % 12 + 1:02d}"
+            st.rerun()
+
+    month_events = [e for e in data["events"] if e["date"].startswith(f"{y}-{m:02d}")]
+    by_day: dict[str, list[dict]] = {}
+    for e in month_events:
+        by_day.setdefault(e["date"], []).append(e)
+    t = today()
+    head = "".join(f'<div class="cal-wd {c}">{w}</div>'
+                   for w, c in zip("日月火水木金土", ["sun", "", "", "", "", "", "sat"]))
+    cells = []
+    for week in calendar.Calendar(firstweekday=6).monthdatescalendar(y, m):  # 日曜はじまり
+        for d in week:
+            iso = d.isoformat()
+            cls = ["cal-day"]
+            if d.month != m:
+                cls.append("out")
+            if iso == t:
+                cls.append("today")
+            if by_day.get(iso):
+                cls.append("has")
+            wd = {6: "sun", 5: "sat"}.get(d.weekday(), "")
+            evs = "".join(
+                f'<div class="cal-ev{" past" if iso < t else ""}">'
+                f'{esc(start_time(e["time"]))} {esc(e["title"])}</div>'
+                for e in by_day.get(iso, []))
+            cells.append(f'<div class="{" ".join(cls)}"><div class="cal-num {wd}">{d.day}</div>{evs}</div>')
+    md(f'<div class="cal-grid">{head}{"".join(cells)}</div>')
+
+    # カレンダーの下に、その月の練習会を一覧で
+    if not month_events:
+        md('<div class="ev-empty">この月の練習会はまだありません。</div>')
+        return
+    rows = []
+    for e in month_events:
+        d = date.fromisoformat(e["date"])
+        n = len(event_rows(data, e["id"], "attending"))
+        cap = e["capacity"]
+        if e["date"] < t:
+            chip = '<span class="cal-chip end">終了</span>'
+        elif cap and n >= cap:
+            chip = '<span class="cal-chip full">満員</span>'
+        else:
+            chip = f'<span class="cal-chip">残り{cap - n}席</span>' if cap else ""
+        place = f'　📍{esc(e["place"])}' if e.get("place") else ""
+        rows.append(f"""<div class="cal-row{" past" if e["date"] < t else ""}">
+  <div class="cal-row-date">{d.month}/{d.day}<span>（{"月火水木金土日"[d.weekday()]}）</span></div>
+  <div class="cal-row-body"><b>{esc(e["title"])}</b>{chip}<br>
+  <span class="cal-row-sub">🕘 {esc(e["time"])}{place}　<span class="nw">👥 {n}/{cap}人</span></span></div>
+</div>""")
+    md(f'<div class="cal-list">{"".join(rows)}</div>')
 
 
 def render_events(data: dict, me: dict | None) -> None:
@@ -1653,6 +1775,7 @@ def render_page(data: dict) -> None:
     render_howto(data)
     render_theme(data)
     render_news(data)
+    render_calendar(data)
     render_events(data, me)
     render_gallery(data)
     render_admin(data, me)
