@@ -64,6 +64,7 @@ THEME_DEFAULT = {
                   "※パドル無料貸出🆓",
 }
 CACHE_TTL = 15  # 秒。他の人の出欠が画面に反映されるまでの最大遅延
+INSTAGRAM_URL = "https://www.instagram.com/yamepick/"
 
 
 def now() -> datetime:
@@ -560,6 +561,18 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 [class*="st-key-gal_"] iframe { border-radius: 12px; }
 .pk-gal-cap { font-weight: 800; line-height: 1.6; padding: 0 4px; }
+
+/* ---- Instagram へのリンク ---- */
+.pk-insta-row { text-align: center; margin: 14px 0 6px; }
+a.pk-insta {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; border-radius: 999px;
+  white-space: nowrap; font-size: .95rem; line-height: 1.4;
+  background: linear-gradient(45deg, #feda75, #fa7e1e 30%, #d62976 60%, #962fbf 80%, #4f5bd5);
+  color: #fff !important; font-weight: 900; text-decoration: none !important; border: 2.5px solid var(--ink);
+  box-shadow: 3px 4px 0 var(--ink);
+}
+a.pk-insta:hover { filter: brightness(1.05); }
+a.pk-insta .ig { font-size: 1.1rem; }
 .pk-gal-date {
   display: inline-block; background: var(--brand); border: 2px solid var(--ink); border-radius: 999px;
   padding: 0 10px; margin-right: 8px; font-size: .85rem;
@@ -798,12 +811,17 @@ def theme_html(title: str, body: str) -> str:
     return f'<div class="pk-howto-title">{esc(title)}</div><div class="pk-theme-body">{body_html}</div>'
 
 
+def instagram_link(text: str) -> str:
+    return (f'<a class="pk-insta" href="{INSTAGRAM_URL}" target="_blank" rel="noopener">'
+            f'<span class="ig">📷</span>{esc(text)}</a>')
+
+
 def render_theme(data: dict) -> None:
     title, body = (setting(data, k) for k in THEME_DEFAULT)
     if not (title.strip() or body.strip()):
         return
     with st.container(key="theme"):
-        md(theme_html(title, body))
+        md(theme_html(title, body) + f'<div class="pk-insta-row">{instagram_link("@yamepick をフォロー")}</div>')
 
 
 def render_news(data: dict) -> None:
@@ -934,6 +952,7 @@ def render_gallery(data: dict) -> None:
         with st.expander(f"過去の写真・動画（{len(items) - 3}件）"):
             for g in items[3:]:
                 item(g)
+    md(f'<div class="pk-insta-row">{instagram_link("Instagram でもっと見る")}</div>')
 
 
 def pill(data: dict, m: dict, ev: dict, me: dict | None) -> str:
