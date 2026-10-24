@@ -20,6 +20,7 @@ import os
 import re
 import time
 import uuid
+from urllib.parse import quote
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -63,6 +64,12 @@ THEME_DEFAULT = {
                   "テーマは「楽しむ」「つながる」「健康になる」\n"
                   "体験会・練習会の情報はここで発信🎵\n"
                   "※パドル無料貸出🆓",
+}
+# 「ACCESS」欄の初期値。管理者メニューの「📍 場所」で書き換えると settings シートに保存される
+ACCESS_DEFAULT = {
+    "access_name": "旧忠見小学校",
+    "access_address": "八女市忠見980",
+    "access_note": "",
 }
 CACHE_TTL = 15  # 秒。他の人の出欠が画面に反映されるまでの最大遅延
 INSTAGRAM_URL = "https://www.instagram.com/yamepick/"
@@ -606,6 +613,21 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
   .cal-ev { font-size: .72rem; }
 }
 
+/* ---- 場所 ---- */
+.st-key-access {
+  background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 16px 10px;
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 22px 0;
+}
+.st-key-access iframe { border-radius: 12px; border: 2px solid var(--ink) !important; }
+.pk-acc-name { font-size: 1.25rem; font-weight: 900; }
+.pk-acc-addr { font-weight: 800; color: var(--sub); margin: 2px 0 4px 1.6em; }
+.pk-acc-note { font-weight: 700; line-height: 1.7; margin: 6px 0 4px; }
+a.pk-map-btn {
+  display: inline-block; padding: 8px 20px; border-radius: 999px; background: var(--brand);
+  color: var(--ink) !important; font-weight: 900; text-decoration: none !important; white-space: nowrap;
+  border: 2.5px solid var(--ink); box-shadow: 3px 4px 0 var(--ink); font-size: .95rem;
+}
+
 /* ---- ギャラリー ---- */
 [class*="st-key-gal_"] {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 10px;
@@ -828,7 +850,7 @@ def render_login() -> None:
 
 def setting(data: dict, key: str) -> str:
     row = find(data["settings"], key)
-    return row["value"] if row else (HOWTO_DEFAULT | THEME_DEFAULT)[key]
+    return row["value"] if row else (HOWTO_DEFAULT | THEME_DEFAULT | ACCESS_DEFAULT)[key]
 
 
 def save_setting(data: dict, key: str, value: str) -> None:
@@ -982,6 +1004,27 @@ def gallery_status(g: dict) -> str:
     if g.get("end") and t > g["end"]:
         return "after"
     return "on"
+
+
+def map_query(address: str) -> str:
+    # 地図で探しやすいよう、県名がなければ「福岡県」を付ける
+    return address if re.search(r"[都道府県]", address) else f"福岡県{address}"
+
+
+def render_access(data: dict) -> None:
+    name, address, note = (setting(data, k).strip() for k in ACCESS_DEFAULT)
+    if not (name or address):
+        return
+    md('<div class="pk-h">ACCESS</div>')
+    q = quote(map_query(address or name))
+    with st.container(key="access"):
+        note_html = f'<div class="pk-acc-note">{esc(note).replace(chr(10), "<br>")}</div>' if note else ""
+        md(f"""<div class="pk-acc-name">📍 {esc(name)}</div>
+<div class="pk-acc-addr">{esc(address)}</div>{note_html}""")
+        if address:
+            st.iframe(f"https://maps.google.com/maps?q={q}&z=16&output=embed", height=240)
+        md(f'<div class="pk-insta-row"><a class="pk-map-btn" href="https://www.google.com/maps/search/?api=1&query={q}" '
+           f'target="_blank" rel="noopener">🗺 Googleマップで開く</a></div>')
 
 
 def render_gallery(data: dict) -> None:
@@ -1236,14 +1279,16 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t2, t8, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "📣 お知らせ", "📸 ギャラリー", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
+        t1, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
             admin_news(data)
         with t8:
             admin_gallery(data)
+        with t9:
+            admin_access(data)
         with t6:
             admin_howto(data)
         with t7:
@@ -1615,6 +1660,26 @@ def admin_howto(data: dict) -> None:
         st.rerun()
 
 
+def admin_access(data: dict) -> None:
+    st.caption("トップの「ACCESS」欄に出す練習場所です。住所を入れると地図と「Googleマップで開く」ボタンが表示されます。")
+    with st.form("adm_access_form"):
+        name = st.text_input("施設名", value=setting(data, "access_name"))
+        address = st.text_input("住所", value=setting(data, "access_address"))
+        note = st.text_area("補足（任意・駐車場や入口など）", value=setting(data, "access_note"), height=90,
+                            placeholder="例: 駐車場は体育館横にあります。体育館シューズをお持ちください。")
+        save = st.form_submit_button("保存", type="primary", width="stretch")
+    if save:
+        for key, value in (("access_name", name.strip()), ("access_address", address.strip()), ("access_note", note.strip())):
+            save_setting(data, key, value)
+        st.session_state["flash"] = "場所の情報を保存しました。"
+        st.rerun()
+    st.caption("施設名と住所を両方空にして保存すると、トップには表示されません。")
+    if st.button("初期の内容に戻す", key="adm_access_reset"):
+        _delete("settings", set(ACCESS_DEFAULT))
+        st.session_state["flash"] = "場所の情報を初期の内容に戻しました。"
+        st.rerun()
+
+
 def admin_theme(data: dict) -> None:
     st.caption("「使い方」の下に出る「テーマ」の欄を編集できます。「 」で囲んだ言葉にはオレンジのマーカーがつきます。")
     with st.form("adm_theme_form"):
@@ -1777,6 +1842,7 @@ def render_page(data: dict) -> None:
     render_news(data)
     render_calendar(data)
     render_events(data, me)
+    render_access(data)
     render_gallery(data)
     render_admin(data, me)
 
