@@ -39,7 +39,8 @@ SHEETS = {
     "events": ["id", "date", "title", "tag", "time", "place", "capacity", "fee", "description"],
     "attendance": ["id", "event_id", "member_id", "status", "updated_at"],
     "news": ["id", "date", "category", "title", "body"],
-    "gallery": ["id", "date", "url", "caption"],  # 写真・動画（Instagram などのリンク）
+    # 写真・動画（Instagram などのリンク）。start/end は掲載期間（空欄なら制限なし）
+    "gallery": ["id", "date", "url", "caption", "start", "end"],
     "settings": ["id", "value"],  # id = 設定名（howto_title など）
     # アップロードした写真。1枚＝1行で、JPEG を base64 にして d1〜d20 のマスに分けて入れる
     # （1マス5万字までのため）。重いので、ふだんの一括読み込みには含めない
@@ -182,7 +183,13 @@ def _read_all() -> dict[str, list[list[str]]]:
             raise
         _refresh_worksheets()
         resp = _call(_spreadsheet().values_batch_get, ranges)
-    return {n: vr.get("values", []) for n, vr in zip(names, resp["valueRanges"])}
+    out = {n: vr.get("values", []) for n, vr in zip(names, resp["valueRanges"])}
+    for n, values in out.items():
+        # アプリ更新で列が増えたシートは、見出し行に新しい列名を書き足す（既存のデータはそのまま）
+        if values and values[0] != SHEETS[n] and SHEETS[n][:len(values[0])] == values[0]:
+            _call(_ws(n).update, values=[SHEETS[n]], range_name="A1", value_input_option="RAW")
+            values[0] = list(SHEETS[n])
+    return out
 
 
 def _rows(values: list[list[str]]) -> list[dict]:
@@ -892,8 +899,24 @@ def render_media(url: str) -> None:
         st.image(src, width="stretch")
 
 
+def short_date(iso: str) -> str:
+    d = date.fromisoformat(iso)
+    return f"{d.month}/{d.day}"
+
+
+def gallery_status(g: dict) -> str:
+    """'on'（掲載中）/ 'before'（開始前）/ 'after'（終了）"""
+    t = today()
+    if g.get("start") and t < g["start"]:
+        return "before"
+    if g.get("end") and t > g["end"]:
+        return "after"
+    return "on"
+
+
 def render_gallery(data: dict) -> None:
-    if not data["gallery"]:
+    items = [g for g in data["gallery"] if gallery_status(g) == "on"]
+    if not items:
         return
     md('<div class="pk-h">GALLERY</div>')
 
@@ -905,11 +928,11 @@ def render_gallery(data: dict) -> None:
                 md(f'<div class="pk-gal-cap">{head}{esc(g["caption"])}</div>')
             render_media(g["url"])
 
-    for g in data["gallery"][:3]:
+    for g in items[:3]:
         item(g)
-    if len(data["gallery"]) > 3:
-        with st.expander(f"過去の写真・動画（{len(data['gallery']) - 3}件）"):
-            for g in data["gallery"][3:]:
+    if len(items) > 3:
+        with st.expander(f"過去の写真・動画（{len(items) - 3}件）"):
+            for g in items[3:]:
                 item(g)
 
 
@@ -1291,6 +1314,23 @@ def admin_news(data: dict) -> None:
     news_form("adm_news_form_new", None)
 
 
+def period_inputs(g0: dict) -> tuple[date | None, date | None]:
+    """掲載期間の入力欄（空欄なら制限なし）。"""
+    c1, c2 = st.columns(2)
+    start = c1.date_input("掲載開始日（空欄＝すぐ）", value=date.fromisoformat(g0["start"]) if g0.get("start") else None,
+                          format="YYYY/MM/DD")
+    end = c2.date_input("掲載終了日（空欄＝ずっと）", value=date.fromisoformat(g0["end"]) if g0.get("end") else None,
+                        format="YYYY/MM/DD")
+    return start, end
+
+
+def period_values(start: date | None, end: date | None) -> dict | None:
+    if start and end and end < start:
+        st.warning("掲載終了日は、掲載開始日より後にしてください。")
+        return None
+    return {"start": start.isoformat() if start else "", "end": end.isoformat() if end else ""}
+
+
 def gallery_form(key: str, g: dict | None) -> None:
     """写真・動画の入力フォーム。g があれば更新、なければ新規掲載。"""
     g0 = g or {}
@@ -1303,6 +1343,7 @@ def gallery_form(key: str, g: dict | None) -> None:
             url = st.text_input("リンク（Instagram の投稿・リール／YouTube／Googleドライブの写真）", value=g0.get("url", ""),
                                 placeholder="https://www.instagram.com/p/xxxxxxxx/")
         caption = st.text_input("ひとこと（任意・絵文字OK）", value=g0.get("caption", ""))
+        start, end = period_inputs(g0)
         b1, b2 = st.columns(2)
         save = b1.form_submit_button("保存" if g else "掲載する", type="primary", width="stretch")
         cancel = b2.form_submit_button("閉じる", width="stretch") if g else False
@@ -1313,13 +1354,16 @@ def gallery_form(key: str, g: dict | None) -> None:
         if media_of(url) is None:
             st.warning("Instagram の投稿・リール、YouTube、Googleドライブの写真のリンクを貼ってください。")
             return
-        values = {"date": d.isoformat(), "url": url.strip(), "caption": caption.strip()}
+        if (period := period_values(start, end)) is None:
+            return
+        values = {"date": d.isoformat(), "url": url.strip(), "caption": caption.strip()} | period
         if g:
             _update("gallery", g["id"], values)
             close_row("adm_gal")
             st.session_state["flash"] = "写真・動画を更新しました。"
         else:
             _append("gallery", values | {"id": new_id()})
+            st.session_state["gal_new_n"] = st.session_state.get("gal_new_n", 0) + 1
             st.session_state["flash"] = "写真・動画を掲載しました。"
         st.rerun()
 
@@ -1327,19 +1371,28 @@ def gallery_form(key: str, g: dict | None) -> None:
 def admin_gallery(data: dict) -> None:
     st.caption("Instagram の投稿を開き「…」→「リンクをコピー」したURLを貼ると、トップの GALLERY に表示されます。"
                "Instagram のアカウントは「公開」にしておいてください（非公開だと表示されません）。")
-    md("**掲載中の写真・動画**")
+    md("**登録済みの写真・動画**")
     if not data["gallery"]:
         st.caption("まだ掲載していません。")
-    for i, g in enumerate(data["gallery"]):
+    shown_ids = [g["id"] for g in data["gallery"] if gallery_status(g) == "on"]
+    for g in data["gallery"]:
         d = date.fromisoformat(g["date"]) if g["date"] else None
         kind = (media_of(g["url"]) or ("?", ""))[0]
         label = {"instagram_p": "📷 Instagram", "instagram_reel": "🎬 リール", "youtube": "▶️ YouTube",
                  "image": "🖼 写真（リンク）", "photo": "🖼 写真"}.get(kind, "❓")
         when = f"**{d.month}/{d.day}**　" if d else ""
-        shown = "" if i < 3 else "（過去の写真・動画）"
+        status = gallery_status(g)
+        if status == "before":
+            status_text = f"⏳ {short_date(g['start'])}から掲載"
+        elif status == "after":
+            status_text = f"⚪ {short_date(g['end'])}で終了"
+        else:
+            status_text = "🟢 掲載中" + (f"（{short_date(g['end'])}まで）" if g.get("end") else "")
+            if shown_ids.index(g["id"]) >= 3:
+                status_text += "・過去の写真に表示"
         admin_row(
             "adm_gal", g["id"],
-            f"{when}{label}　{g['caption'] or g['url']}{shown}",
+            f"{when}{label}　{g['caption'] or g['url']}　{status_text}",
             lambda g=g: gallery_form(f"adm_gal_form_{g['id']}", g),
             "この写真・動画をギャラリーから外します（アップロードした写真はデータも消えます。"
             "Instagram の投稿そのものは消えません）。",
@@ -1350,7 +1403,8 @@ def admin_gallery(data: dict) -> None:
     upload_photos_form()
     st.divider()
     md("**🔗 リンクで掲載する（Instagram・YouTube など）**")
-    gallery_form("adm_gal_form_new", None)
+    # 掲載できたら番号を変えて、空のフォームを出し直す（前の入力が残らないように）
+    gallery_form(f"adm_gal_form_new{st.session_state.get('gal_new_n', 0)}", None)
 
 
 def delete_gallery_item(g: dict) -> None:
@@ -1365,6 +1419,7 @@ def upload_photos_form() -> None:
         files = st.file_uploader("写真を選ぶ", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
         d = st.date_input("日付", value=now().date())
         caption = st.text_input("ひとこと（任意・全部の写真に付きます）")
+        start, end = period_inputs({})
         save = st.form_submit_button("アップロードして掲載する", type="primary", width="stretch")
     if not save:
         return
@@ -1374,6 +1429,8 @@ def upload_photos_form() -> None:
     if len(files) > 10:
         st.warning("一度に掲載できるのは10枚までです。")
         return
+    if (period := period_values(start, end)) is None:
+        return
     done, failed = 0, []
     with st.spinner("写真を保存しています…"):
         for f in files:
@@ -1382,7 +1439,7 @@ def upload_photos_form() -> None:
             except Exception:  # 壊れた画像・読めない形式など
                 failed.append(f.name)
                 continue
-            _append("gallery", {"id": new_id(), "date": d.isoformat(), "url": f"photo:{pid}", "caption": caption.strip()})
+            _append("gallery", {"id": new_id(), "date": d.isoformat(), "url": f"photo:{pid}", "caption": caption.strip()} | period)
             done += 1
     if failed:
         st.session_state["flash_warn"] = f"読み込めなかった写真があります：{'、'.join(failed)}"
