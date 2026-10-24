@@ -431,7 +431,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 
 /* ---- 白カード（レベル・使い方・ログイン） ---- */
-.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-setpin {
+.pk-card, .st-key-howto, .st-key-theme, .st-key-login {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
@@ -680,9 +680,11 @@ def render_hero(data: dict, me: dict | None) -> None:
 def render_login() -> None:
     with st.container(key="login"):
         md('<div class="pk-login-title">👋 お名前と好きな数字を登録</div>')
+        if who := st.session_state.get("need_pin"):
+            st.info(f"{who} さん、好きな数字の登録をお願いします 🙏 下にお名前と好きな数字を入れて「はじめる」を押してください。")
         st.caption("一度登録すると、このスマホ（ブラウザ）では次回から自動でログインします。"
                    "別のスマホでは、同じお名前と数字を入れてください。")
-        name = st.text_input("お名前（表示名）", max_chars=20, placeholder="例: のり")
+        name = st.text_input("お名前（表示名）", value=st.session_state.get("need_pin", ""), max_chars=20, placeholder="例: のり")
         pin = st.text_input("好きな数字（4〜8桁）", max_chars=8, type="password", placeholder="例: 0123",
                             help="同じ名前の人と見分けるための数字です。忘れたときは管理者がリセットできます。")
         with st.expander("はじめての方はこちらも教えてください"):
@@ -698,6 +700,7 @@ def render_login() -> None:
                 src = "" if source.startswith("（") else source
                 res, m = login_or_register(name, pin, src, referrer)
                 if res in ("ok", "new"):
+                    st.session_state.pop("need_pin", None)
                     sign_in(m)
                     st.session_state["flash"] = ("ようこそ！登録しました 🎉" if res == "new"
                                                  else f"おかえりなさい、{m['name']} さん！")
@@ -708,25 +711,6 @@ def render_login() -> None:
                              "数字を忘れたときは管理者に「数字のリセット」をお願いしてください。")
                 else:
                     st.error("この名前はご家族として登録されています。登録した方のスマホから出欠を入れてください。")
-
-
-def render_set_pin(me: dict) -> None:
-    """数字なしでログイン中の人に、好きな数字の設定をお願いする。"""
-    with st.container(key="setpin"):
-        md('<div class="pk-login-title">🔢 好きな数字を設定してください</div>')
-        st.caption("同じ名前の人と見分けるための数字です。別のスマホでログインするときに使います。")
-        c1, c2 = st.columns([2, 1], vertical_alignment="bottom")
-        pin = c1.text_input("好きな数字（4〜8桁）", max_chars=8, type="password", placeholder="例: 0123", key="setpin_pin")
-        if c2.button("設定する", type="primary", width="stretch", key="setpin_btn"):
-            pin = pin.strip()
-            if not (pin.isdigit() and 4 <= len(pin) <= 8):
-                st.warning("好きな数字を4〜8桁で入力してください。")
-                return
-            h = pin_hash(me["id"], pin)
-            _update("members", me["id"], {"pin_hash": h})
-            sign_in(me | {"pin_hash": h})  # 数字が変わるとログイン情報も変わるので保存し直す
-            st.session_state["flash"] = "好きな数字を設定しました！"
-            st.rerun()
 
 
 def setting(data: dict, key: str) -> str:
@@ -1290,6 +1274,12 @@ def show_api_error(e: gspread.exceptions.APIError) -> None:
 
 def render_page(data: dict) -> None:
     me = current_member(data)
+    if me and not me["pin_hash"] and not me["family_of"]:
+        # 数字なしで登録した人（数字機能が無かった頃・管理者のリセット後）は、
+        # 登録フォームでお名前と好きな数字を一緒に登録し直してもらう
+        sign_out()
+        st.session_state["need_pin"] = me["name"]
+        me = None
     remember_login(me)
     render_hero(data, me)
     if msg := st.session_state.pop("flash", None):
@@ -1298,8 +1288,6 @@ def render_page(data: dict) -> None:
         st.toast(msg, icon="⚠️")
     if not me:
         render_login()
-    elif not me["pin_hash"] and not me["family_of"]:
-        render_set_pin(me)
     render_howto(data)
     render_theme(data)
     render_news(data)
