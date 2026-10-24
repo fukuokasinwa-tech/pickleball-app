@@ -427,8 +427,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .st-key-hero_actions { position: relative; z-index: 1; margin-top: 6px; align-items: center; }
 .pk-count-chip {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
-  background: #222; color: #fff; border: 2px solid #555; border-radius: 999px;
-  padding: 6px 14px; font-weight: 800; font-size: .9rem; line-height: 1.4;
+  color: #fff; font-weight: 800; font-size: .9rem; line-height: 1.4; padding: 0 2px;
 }
 .pk-count-chip b { color: var(--brand); font-size: 1.05rem; }
 .st-key-hero_actions > div { align-self: center; }
@@ -441,7 +440,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
   .st-key-hero_actions button div:has(> span > [data-testid="stIconMaterial"]) { display: none; }  /* ⌄ の矢印 */
   .st-key-hero .st-key-hero_actions button { padding: 5px 8px !important; min-height: 0 !important; }
   .st-key-hero .st-key-hero_actions button p { font-size: .78rem !important; white-space: nowrap; }
-  .pk-count-chip { padding: 5px 8px; font-size: .78rem; }
+  .pk-count-chip { font-size: .72rem; gap: 2px; padding: 0; }
   .pk-count-chip b { font-size: 1em; }
 }
 
@@ -696,7 +695,7 @@ def render_hero(data: dict, me: dict | None) -> None:
                         st.session_state["flash"] = f"{name.strip()} さんを追加しました！"
                         st.rerun()
             # 登録メンバーの人数（家族として追加した人も含む）
-            md(f'<div class="pk-count-chip">👥 全登録メンバー<b>{len(data["members"])}</b>人</div>')
+            md(f'<div class="pk-count-chip">👥 YAME PICK登録メンバー <b>{len(data["members"])}</b>人</div>')
 
 
 def render_login() -> None:
