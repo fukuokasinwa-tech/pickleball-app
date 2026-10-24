@@ -1,0 +1,36 @@
+# Streamlit Community Cloud のアプリは、しばらくアクセスがないと休止する。
+# 4時間おきに自動でアプリを開いて、休止していたら起こしておく。
+name: Keep app awake
+
+on:
+  schedule:
+    - cron: "23 */4 * * *"  # 4時間おき（UTC）。GitHub の混雑で数分〜数十分遅れることがある
+  workflow_dispatch:  # Actions 画面の「Run workflow」で手動実行もできる
+
+permissions:
+  contents: read
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_URL: https://pickleball-app-4vdhbkkfrztdscguvjgqja.streamlit.app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright
+        run: |
+          pip install playwright==1.48.0
+          python -m playwright install --with-deps chromium
+      - name: Open the app
+        run: python .github/scripts/wake_app.py
+      - name: Save screenshot on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wake-failed
+          path: wake_failed.png
+          if-no-files-found: ignore
