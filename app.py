@@ -41,7 +41,12 @@ SHEETS = {
     "news": ["id", "date", "category", "title", "body"],
     "gallery": ["id", "date", "url", "caption"],  # 写真・動画（Instagram などのリンク）
     "settings": ["id", "value"],  # id = 設定名（howto_title など）
+    # アップロードした写真。1枚＝1行で、JPEG を base64 にして d1〜d20 のマスに分けて入れる
+    # （1マス5万字までのため）。重いので、ふだんの一括読み込みには含めない
+    "photos": ["id"] + [f"d{i}" for i in range(1, 21)],
 }
+LAZY_SHEETS = {"photos"}
+PHOTO_CHUNK = 45000  # 1マスに入れる文字数
 # 「使い方はかんたん！」の初期の文。管理者メニューで書き換えると settings シートに保存される
 HOWTO_DEFAULT = {
     "howto_title": "📖 使い方はかんたん！",
@@ -166,8 +171,8 @@ def _to_row(rec: dict, name: str) -> list:
 
 def _read_all() -> dict[str, list[list[str]]]:
     """全シートを1回のリクエストでまとめて読む。"""
-    names = list(SHEETS)
-    for name in names:
+    names = [n for n in SHEETS if n not in LAZY_SHEETS]
+    for name in SHEETS:
         _ws(name)  # シートが無ければ作る（覚えている間は通信なし）
     ranges = [f"'{n}'" for n in names]
     try:
@@ -817,9 +822,44 @@ def render_news(data: dict) -> None:
                 md(card(n))
 
 
+def compress_photo(raw: bytes) -> bytes:
+    """スマホの写真を、向きを直して長い辺1280pxの JPEG に縮める。"""
+    from PIL import Image, ImageOps
+    im = ImageOps.exif_transpose(Image.open(io.BytesIO(raw)))
+    im = im.convert("RGB")
+    im.thumbnail((1280, 1280))
+    for quality in (80, 70, 60, 50):  # 20マスに収まるまで画質を下げる
+        buf = io.BytesIO()
+        im.save(buf, "JPEG", quality=quality, optimize=True, progressive=True)
+        if len(base64.b64encode(buf.getvalue())) <= PHOTO_CHUNK * 20:
+            return buf.getvalue()
+    raise ValueError("写真が大きすぎます")
+
+
+def save_photo(jpeg: bytes) -> str:
+    pid = new_id()
+    b64 = base64.b64encode(jpeg).decode()
+    chunks = [b64[i:i + PHOTO_CHUNK] for i in range(0, len(b64), PHOTO_CHUNK)]
+    _call(_ws("photos").append_row, [pid] + chunks, value_input_option="RAW")
+    return pid
+
+
+@st.cache_data(ttl=3600, max_entries=60, show_spinner=False)
+def photo_bytes(pid: str) -> bytes | None:
+    """写真を1枚だけ読む（写真は書き換えないので長めに覚えておく）。"""
+    ws = _ws("photos")
+    ids = _call(ws.col_values, 1)
+    if pid not in ids:
+        return None
+    row = _call(ws.row_values, ids.index(pid) + 1)
+    return base64.b64decode("".join(row[1:]))
+
+
 def media_of(url: str) -> tuple[str, str] | None:
     """貼られたリンクから (種類, 表示用URL) を作る。対応していないリンクは None。"""
     url = (url or "").strip()
+    if m := re.fullmatch(r"photo:([0-9a-f]+)", url):  # アプリからアップロードした写真
+        return "photo", m[1]
     if m := re.search(r"instagram\.com/(?:[\w.]+/)?(p|reels?|tv)/([\w-]+)", url):
         kind = "p" if m[1] == "p" else "reel"
         return f"instagram_{kind}", f"https://www.instagram.com/{kind}/{m[2]}/embed/"
@@ -843,6 +883,11 @@ def render_media(url: str) -> None:
         st.iframe(src, height=720 if kind == "instagram_reel" else 600)
     elif kind == "youtube":
         st.video(src)
+    elif kind == "photo":
+        if data := photo_bytes(src):
+            st.image(data, width="stretch")
+        else:
+            st.caption("（写真が見つかりません）")
     else:
         st.image(src, width="stretch")
 
@@ -1251,8 +1296,12 @@ def gallery_form(key: str, g: dict | None) -> None:
     g0 = g or {}
     with st.form(key):
         d = st.date_input("日付", value=date.fromisoformat(g0["date"]) if g0.get("date") else now().date())
-        url = st.text_input("リンク（Instagram の投稿・リール／YouTube／Googleドライブの写真）", value=g0.get("url", ""),
-                            placeholder="https://www.instagram.com/p/xxxxxxxx/")
+        if g0.get("url", "").startswith("photo:"):
+            url = g0["url"]  # アップロードした写真は差し替えず、日付とひとことだけ変える
+            st.caption("📷 アップロードした写真です（写真を変えるときは削除して掲載し直してください）。")
+        else:
+            url = st.text_input("リンク（Instagram の投稿・リール／YouTube／Googleドライブの写真）", value=g0.get("url", ""),
+                                placeholder="https://www.instagram.com/p/xxxxxxxx/")
         caption = st.text_input("ひとこと（任意・絵文字OK）", value=g0.get("caption", ""))
         b1, b2 = st.columns(2)
         save = b1.form_submit_button("保存" if g else "掲載する", type="primary", width="stretch")
@@ -1284,19 +1333,62 @@ def admin_gallery(data: dict) -> None:
     for i, g in enumerate(data["gallery"]):
         d = date.fromisoformat(g["date"]) if g["date"] else None
         kind = (media_of(g["url"]) or ("?", ""))[0]
-        label = {"instagram_p": "📷 Instagram", "instagram_reel": "🎬 リール", "youtube": "▶️ YouTube", "image": "🖼 写真"}.get(kind, "❓")
+        label = {"instagram_p": "📷 Instagram", "instagram_reel": "🎬 リール", "youtube": "▶️ YouTube",
+                 "image": "🖼 写真（リンク）", "photo": "🖼 写真"}.get(kind, "❓")
         when = f"**{d.month}/{d.day}**　" if d else ""
         shown = "" if i < 3 else "（過去の写真・動画）"
         admin_row(
             "adm_gal", g["id"],
             f"{when}{label}　{g['caption'] or g['url']}{shown}",
             lambda g=g: gallery_form(f"adm_gal_form_{g['id']}", g),
-            "この写真・動画をギャラリーから外します（Instagram の投稿そのものは消えません）。",
-            lambda gid=g["id"]: _delete("gallery", {gid}),
+            "この写真・動画をギャラリーから外します（アップロードした写真はデータも消えます。"
+            "Instagram の投稿そのものは消えません）。",
+            lambda g=g: delete_gallery_item(g),
             "ギャラリーから外しました。")
     st.divider()
-    md("**＋ 新しく掲載する**")
+    md("**📷 写真をアップロードして掲載する**")
+    upload_photos_form()
+    st.divider()
+    md("**🔗 リンクで掲載する（Instagram・YouTube など）**")
     gallery_form("adm_gal_form_new", None)
+
+
+def delete_gallery_item(g: dict) -> None:
+    if (media_of(g["url"]) or ("",))[0] == "photo":
+        _delete("photos", {g["url"].removeprefix("photo:")})
+    _delete("gallery", {g["id"]})
+
+
+def upload_photos_form() -> None:
+    st.caption("スマホのカメラロールから選べます（一度に10枚まで）。自動で小さくしてから保存します。動画は Instagram か YouTube のリンクで掲載してください。")
+    with st.form("adm_gal_upload", clear_on_submit=True):
+        files = st.file_uploader("写真を選ぶ", type=["jpg", "jpeg", "png", "webp"], accept_multiple_files=True)
+        d = st.date_input("日付", value=now().date())
+        caption = st.text_input("ひとこと（任意・全部の写真に付きます）")
+        save = st.form_submit_button("アップロードして掲載する", type="primary", width="stretch")
+    if not save:
+        return
+    if not files:
+        st.warning("写真を選んでください。")
+        return
+    if len(files) > 10:
+        st.warning("一度に掲載できるのは10枚までです。")
+        return
+    done, failed = 0, []
+    with st.spinner("写真を保存しています…"):
+        for f in files:
+            try:
+                pid = save_photo(compress_photo(f.getvalue()))
+            except Exception:  # 壊れた画像・読めない形式など
+                failed.append(f.name)
+                continue
+            _append("gallery", {"id": new_id(), "date": d.isoformat(), "url": f"photo:{pid}", "caption": caption.strip()})
+            done += 1
+    if failed:
+        st.session_state["flash_warn"] = f"読み込めなかった写真があります：{'、'.join(failed)}"
+    if done:
+        st.session_state["flash"] = f"写真を{done}枚掲載しました。"
+    st.rerun()
 
 
 def admin_howto(data: dict) -> None:
