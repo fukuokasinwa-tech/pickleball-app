@@ -410,14 +410,23 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
   border-radius: 0 0 28px 28px; position: relative; overflow: hidden;
 }
 .pk-logo {
-  position: absolute; top: 20px; right: 18px; width: 124px; height: 124px; z-index: 1;
+  position: absolute; top: 18px; right: 22px; width: 150px; height: 150px; z-index: 1;
   transform: rotate(-8deg); pointer-events: none;
   filter: drop-shadow(0 0 22px rgba(254, 151, 26, .45)) drop-shadow(4px 6px 0 rgba(0, 0, 0, .55));
 }
-.pk-glow {
-  position: absolute; top: -120px; right: -120px; width: 300px; height: 300px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(254, 151, 26, .28) 0%, rgba(254, 151, 26, 0) 70%);
-  pointer-events: none;
+/* ロゴの後ろの大きなピックルボール（穴あきボール） */
+.pk-ball {
+  position: absolute; top: -90px; right: -90px; width: 250px; height: 250px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 64%, var(--ink) 0 17px, transparent 18px),
+    radial-gradient(circle at 56% 46%, var(--ink) 0 17px, transparent 18px),
+    radial-gradient(circle at 28% 90%, var(--ink) 0 16px, transparent 17px),
+    radial-gradient(circle at 60% 84%, var(--ink) 0 16px, transparent 17px),
+    radial-gradient(circle at 84% 64%, var(--ink) 0 16px, transparent 17px),
+    radial-gradient(circle at 88% 32%, var(--ink) 0 16px, transparent 17px),
+    radial-gradient(circle at 62% 14%, var(--ink) 0 14px, transparent 15px),
+    var(--brand-light);
+  opacity: .9; pointer-events: none;
 }
 .pk-hero-text { position: relative; z-index: 1; }
 .pk-kicker { color: var(--brand); font-weight: 900; letter-spacing: .2em; font-size: .85rem; }
@@ -554,7 +563,9 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 
 @media (max-width: 480px) {
   .pk-title { font-size: 2.3rem; }
-  .pk-logo { width: 108px; height: 108px; top: 22px; right: 12px; }
+  .pk-logo { width: 128px; height: 128px; top: 16px; right: 10px; }
+  .pk-ball { width: 200px; height: 200px; top: -78px; right: -78px; }
+  .pk-sub { max-width: calc(100% - 128px); }  /* ロゴに重ならないよう折り返す */
   .ev-top { grid-template-columns: 84px 1fr; }
   .ev-date .d { font-size: 2.6rem; }
 }
@@ -660,7 +671,7 @@ try {{ localStorage.removeItem('{LOGIN_COOKIE}'); }} catch (e) {{}}"""
 
 def render_hero(data: dict, me: dict | None) -> None:
     with st.container(key="hero"):
-        md(f"""<div class="pk-glow"></div><img class="pk-logo" src="{logo_data_uri()}" alt="YAME PICK">
+        md(f"""<div class="pk-ball"></div><img class="pk-logo" src="{logo_data_uri()}" alt="YAME PICK">
 <div class="pk-hero-text">
   <div class="pk-kicker">PICKLEBALL COMMUNITY</div>
   <div class="pk-title">YAME <span class="y">PICK</span><br>参加確認</div>
