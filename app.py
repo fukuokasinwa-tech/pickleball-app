@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo
 import gspread
 import streamlit as st
 
+import post_images
+
 JST = ZoneInfo("Asia/Tokyo")
 WEEKDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
 SOURCES = ["友人・知人の紹介", "家族", "Instagram/SNS", "Web検索", "チラシ・ポスター", "体験会", "その他"]
@@ -1293,8 +1295,9 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方", "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
+        t1, t10, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "🖼 投稿画像", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方", "🎯 テーマ", "✅ 出欠",
+             "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
@@ -1303,6 +1306,8 @@ def render_admin(data: dict, me: dict | None) -> None:
             admin_gallery(data)
         with t9:
             admin_access(data)
+        with t10:
+            admin_post_images(data)
         with t6:
             admin_howto(data)
         with t7:
@@ -1672,6 +1677,71 @@ def admin_howto(data: dict) -> None:
         _delete("settings", set(HOWTO_DEFAULT))
         st.session_state["flash"] = "使い方の案内を初期の文に戻しました。"
         st.rerun()
+
+
+def post_events(data: dict, ym: str) -> list[dict]:
+    """投稿画像用に、その月の練習会と参加人数をまとめる（名前は入れない）。"""
+    out = []
+    for e in data["events"]:
+        if not e["date"].startswith(ym):
+            continue
+        going = [a["member_id"] for a in event_rows(data, e["id"], "attending")]
+        out.append({k: e.get(k, "") for k in ("date", "title", "tag", "time", "place", "fee")}
+                   | {"capacity": e["capacity"], "going": len(going),
+                      "first": sum(is_first_time(data, mid, e) for mid in going)})
+    return out
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
+def post_png(kind: str, ym: str, events_json: str, size: str) -> bytes:
+    y, m = map(int, ym.split("-"))
+    events = json.loads(events_json)
+    if kind == "schedule":
+        return post_images.schedule_image(y, m, events, size)
+    return post_images.status_image(m, events, size)
+
+
+def admin_post_images(data: dict) -> None:
+    st.caption("練習会の日程と参加人数から、Instagram に投稿する画像と投稿文を作ります。"
+               "画像は「📥 保存」でダウンロードしてください（iPhone は開いた画像を長押しして「写真に追加」）。")
+    default = default_calendar_month(data)
+    months = sorted({e["date"][:7] for e in data["events"]} | {default}, reverse=True)
+    c1, c2 = st.columns(2)
+    ym = c1.selectbox("月", months, index=months.index(default), key="post_ym",
+                      format_func=lambda s: f"{s[:4]}年{int(s[5:])}月")
+    size = c2.radio("サイズ", ["feed", "story"], horizontal=True, key="post_size",
+                    format_func={"feed": "投稿（縦長 4:5）", "story": "ストーリーズ（9:16）"}.get)
+    events = post_events(data, ym)
+    if not events:
+        st.info("この月の練習会はまだありません。「📅 練習会」で作成してください。")
+        return
+    want = f"{ym}/{size}"
+    if st.button("🖼 画像を作る", type="primary", key="post_make", width="stretch"):
+        st.session_state["post_ready"] = want
+    if st.session_state.get("post_ready") != want:
+        return
+
+    y, m = map(int, ym.split("-"))
+    md("**① 月間スケジュール**")
+    png = post_png("schedule", ym, json.dumps(events, ensure_ascii=False), size)
+    st.image(png, width="stretch")
+    st.download_button("📥 スケジュール画像を保存", png, file_name=f"yamepick_{ym}_schedule_{size}.png",
+                       mime="image/png", width="stretch", key="post_dl_schedule")
+
+    md("**② 参加状況（参加者募集）**")
+    upcoming = [e for e in events if e["date"] >= today()]
+    if upcoming:
+        png2 = post_png("status", ym, json.dumps(upcoming, ensure_ascii=False), size)
+        st.image(png2, width="stretch")
+        st.download_button("📥 参加状況の画像を保存", png2, file_name=f"yamepick_{ym}_status_{size}.png",
+                           mime="image/png", width="stretch", key="post_dl_status")
+        st.caption("参加人数はこの画像を作った時点のものです。名前は載せていません。")
+    else:
+        st.caption("この月の練習会はすべて終わっているので、参加状況の画像は作りません。")
+
+    md("**③ 投稿文**（右上の📋でコピー）")
+    st.code(post_images.caption(y, m, events, setting(data, "access_name"), setting(data, "access_address")),
+            language=None, wrap_lines=True)
 
 
 def admin_access(data: dict) -> None:
