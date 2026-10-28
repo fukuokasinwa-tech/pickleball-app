@@ -1147,10 +1147,24 @@ def start_time(text: str) -> str:
     return f"{int(m[1])}:{m[2]}" if m else ""
 
 
+def default_calendar_month(data: dict) -> str:
+    """最初に表示する月（YYYY-MM）。今月の練習会が全部終わっていたら次の月にする。
+
+    今月に練習会がまだ1件も登録されていないときは、今月のまま（これから登録されるかもしれないため）。
+    """
+    t = today()
+    this_month = t[:7]
+    dates = [e["date"] for e in data["events"] if e["date"][:7] == this_month]
+    if not dates or max(dates) >= t:
+        return this_month
+    y, m = map(int, this_month.split("-"))
+    return f"{y + (m == 12)}-{m % 12 + 1:02d}"
+
+
 def render_calendar(data: dict) -> None:
     """練習会を月ごとのカレンダーと一覧で見せる。"""
     md('<div class="pk-h">CALENDAR</div>')
-    ym = st.session_state.get("cal_ym") or today()[:7]
+    ym = st.session_state.get("cal_ym") or default_calendar_month(data)
     y, m = map(int, ym.split("-"))
     with st.container(key="cal_nav", horizontal=True, vertical_alignment="center"):
         if st.button("◀ 前の月", key="cal_prev"):
