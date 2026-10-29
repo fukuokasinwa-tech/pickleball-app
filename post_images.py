@@ -241,7 +241,7 @@ def schedule_image(year: int, month: int, events: list[dict], size: str = "feed"
 
 
 def status_image(month: int, events: list[dict], size: str = "feed") -> bytes:
-    """② 参加状況（残り席・満員だけ。参加予定人数や名前は載せない）。"""
+    """② 参加状況（募集中／満員だけ。人数や名前は載せない）。"""
     events = sorted(events, key=lambda e: e["date"])
     im = Image.new("RGB", (W, 4000), BG)
     y = draw_header(im, 0, f"参加者募集中！ {month}月の練習会")
@@ -249,7 +249,7 @@ def status_image(month: int, events: list[dict], size: str = "feed") -> bytes:
     y += 20
     for e in events:
         dt = date.fromisoformat(e["date"])
-        h = 286 if e.get("capacity") else 236
+        h = 236
         card(d, (PAD, y + 30, W - PAD, y + 30 + h))
         x0, top = PAD + 34, y + 30 + 28
         right = W - PAD - 34
@@ -261,22 +261,13 @@ def status_image(month: int, events: list[dict], size: str = "feed") -> bytes:
         cap, going = int(e["capacity"] or 0), int(e["going"])
         # 参加予定人数は出さず、定員だけ
         d.text((x0, top + 156), f"定員 {cap}名" if cap else "定員なし", font=font(34), fill=INK, anchor="lm")
-        # 状態
+        # 状態は「募集中」だけ（満員のときだけ「満員」）。残り席数やバーは出さない
         if cap and going >= cap:
             chip, fill, color = "満員", RED, WHITE
-        elif cap:
-            chip, fill, color = f"残り {cap - going} 席", BRAND, INK
         else:
             chip, fill, color = "募集中", BRAND, INK
         cw = text_w(d, chip, font(36)) + 44
         pill(d, right - cw, top + 124, chip, font(36), fill, color, pad_x=22, h=64)
-        # 埋まり具合のバー（人数の数字は出さない）
-        if cap:
-            by = top + 204
-            d.rounded_rectangle((x0, by, right, by + 26), 13, fill=GREY, outline=INK, width=3)
-            filled = x0 + (right - x0) * min(1, going / cap)
-            if going:
-                d.rounded_rectangle((x0, by, max(filled, x0 + 26), by + 26), 13, fill=BRAND, outline=INK, width=3)
         y += h + 30 + 10
     y = draw_footer(im, y, "空きがあるうちに参加登録を！", "プロフィールのリンクから  @yamepick")
     return finish(im, y, size)

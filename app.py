@@ -1735,7 +1735,7 @@ def admin_post_images(data: dict) -> None:
         st.image(png2, width="stretch")
         st.download_button("📥 参加状況の画像を保存", png2, file_name=f"yamepick_{ym}_status_{size}.png",
                            mime="image/png", width="stretch", key="post_dl_status")
-        st.caption("残り席数は、この画像を作った時点のものです。参加予定人数と名前は載せていません。")
+        st.caption("「募集中」「満員」は、この画像を作った時点のものです。人数と名前は載せていません。")
     else:
         st.caption("この月の練習会はすべて終わっているので、参加状況の画像は作りません。")
 
