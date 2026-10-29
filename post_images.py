@@ -1,6 +1,7 @@
 """Instagram 投稿用の画像を作る（管理者メニュー「🖼 投稿画像」）。
 
-アプリの見た目（黒・オレンジ・丸ゴシック）に合わせて、Pillow で PNG を描く。
+アプリの見た目（黒・オレンジ・丸ゴシック）に合わせて、Pillow で描いて JPEG にする
+（Instagram のフィード投稿は PNG だと読み込めないことがあるため）。
 Streamlit には依存しない。練習会のデータは app.py から dict で受け取る。
 
     events: [{"date": "2026-11-07", "title": ..., "tag": ..., "time": ..., "place": ...,
@@ -200,7 +201,7 @@ def draw_footer(im: Image.Image, y: int, main: str, sub: str) -> int:
 
 
 def finish(content: Image.Image, used_h: int, size: str) -> bytes:
-    """描いた中身を投稿サイズの画像に収めて PNG にする。
+    """描いた中身を投稿サイズの画像に収めて JPEG にする。
 
     入りきらないときは縮める。上端は黒いヘッダーの帯を横幅いっぱいに伸ばし、
     ストーリーズでは上に名前などが重なるので、ヘッダーの文字を少し下げる。
@@ -220,7 +221,7 @@ def finish(content: Image.Image, used_h: int, size: str) -> bytes:
         top = top_body
     out.paste(content, ((tw - content.width) // 2, top))
     buf = io.BytesIO()
-    out.save(buf, "PNG", optimize=True)
+    out.save(buf, "JPEG", quality=92, optimize=True, progressive=False, subsampling=0)
     return buf.getvalue()
 
 

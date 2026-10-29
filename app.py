@@ -1693,7 +1693,7 @@ def post_events(data: dict, ym: str) -> list[dict]:
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def post_png(kind: str, ym: str, events_json: str, size: str) -> bytes:
+def post_jpg(kind: str, ym: str, events_json: str, size: str) -> bytes:
     y, m = map(int, ym.split("-"))
     events = json.loads(events_json)
     if kind == "schedule":
@@ -1702,8 +1702,14 @@ def post_png(kind: str, ym: str, events_json: str, size: str) -> bytes:
 
 
 def admin_post_images(data: dict) -> None:
-    st.caption("練習会の日程と参加人数から、Instagram に投稿する画像と投稿文を作ります。"
-               "画像は「📥 保存」でダウンロードしてください（iPhone は開いた画像を長押しして「写真に追加」）。")
+    st.caption("練習会の日程から、Instagram に投稿する画像と投稿文を作ります。")
+    with st.expander("📱 Instagram への投稿のしかた"):
+        md("""1. 「🖼 画像を作る」を押して、出てきた画像を**長押し**して「**"写真"に追加**」を押す<br>
+（または「📥 保存」→ 共有ボタン →「**画像を保存**」）
+2. **Instagram アプリ**を開いて、下の「**＋**」→「**投稿**」→ 保存した画像を選ぶ
+3. 下の「③ 投稿文」を📋でコピーして、キャプションに貼り付ける
+
+※ 共有メニューから直接 Instagram を選ぶと、フィード投稿で画像が出ないことがあります。いったん「写真」に保存してから投稿してください。""")
     default = default_calendar_month(data)
     months = sorted({e["date"][:7] for e in data["events"]} | {default}, reverse=True)
     c1, c2 = st.columns(2)
@@ -1723,18 +1729,18 @@ def admin_post_images(data: dict) -> None:
 
     y, m = map(int, ym.split("-"))
     md("**① 月間スケジュール**")
-    png = post_png("schedule", ym, json.dumps(events, ensure_ascii=False), size)
-    st.image(png, width="stretch")
-    st.download_button("📥 スケジュール画像を保存", png, file_name=f"yamepick_{ym}_schedule_{size}.png",
-                       mime="image/png", width="stretch", key="post_dl_schedule")
+    img = post_jpg("schedule", ym, json.dumps(events, ensure_ascii=False), size)
+    st.image(img, width="stretch")
+    st.download_button("📥 スケジュール画像を保存", img, file_name=f"yamepick_{ym}_schedule_{size}.jpg",
+                       mime="image/jpeg", width="stretch", key="post_dl_schedule")
 
     md("**② 参加状況（参加者募集）**")
     upcoming = [e for e in events if e["date"] >= today()]
     if upcoming:
-        png2 = post_png("status", ym, json.dumps(upcoming, ensure_ascii=False), size)
-        st.image(png2, width="stretch")
-        st.download_button("📥 参加状況の画像を保存", png2, file_name=f"yamepick_{ym}_status_{size}.png",
-                           mime="image/png", width="stretch", key="post_dl_status")
+        img2 = post_jpg("status", ym, json.dumps(upcoming, ensure_ascii=False), size)
+        st.image(img2, width="stretch")
+        st.download_button("📥 参加状況の画像を保存", img2, file_name=f"yamepick_{ym}_status_{size}.jpg",
+                           mime="image/jpeg", width="stretch", key="post_dl_status")
         st.caption("「募集中」「満員」は、この画像を作った時点のものです。人数と名前は載せていません。")
     else:
         st.caption("この月の練習会はすべて終わっているので、参加状況の画像は作りません。")
