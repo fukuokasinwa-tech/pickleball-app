@@ -241,7 +241,7 @@ def schedule_image(year: int, month: int, events: list[dict], size: str = "feed"
 
 
 def status_image(month: int, events: list[dict], size: str = "feed") -> bytes:
-    """② 参加状況（人数だけ。名前は載せない）。"""
+    """② 参加状況（残り席・満員だけ。参加予定人数や名前は載せない）。"""
     events = sorted(events, key=lambda e: e["date"])
     im = Image.new("RGB", (W, 4000), BG)
     y = draw_header(im, 0, f"参加者募集中！ {month}月の練習会")
@@ -259,15 +259,8 @@ def status_image(month: int, events: list[dict], size: str = "feed") -> bytes:
         line2 = "  ".join(x for x in (clean(e["time"]), clean(e.get("place", ""))) if x)
         d.text((x0, top + 82), fit(d, line2, font(28, False), right - x0), font=font(28, False), fill=SUB)
         cap, going = int(e["capacity"] or 0), int(e["going"])
-        # 人数
-        d.text((x0, top + 136), "参加予定", font=font(30), fill=INK)
-        nx = x0 + text_w(d, "参加予定 ", font(30))
-        d.text((nx, top + 116), str(going), font=font(76), fill=INK)
-        nx += text_w(d, str(going), font(76)) + 8
-        unit = f"/ {cap}人" if cap else "人"
-        d.text((nx, top + 144), unit, font=font(34), fill=SUB)
-        if e.get("first"):  # 初参加の人数は人数の横に小さく
-            d.text((nx + text_w(d, unit, font(34)) + 18, top + 150), f"（初参加 {e['first']}人）", font=font(26), fill=RED)
+        # 参加予定人数は出さず、定員だけ
+        d.text((x0, top + 156), f"定員 {cap}名" if cap else "定員なし", font=font(34), fill=INK, anchor="lm")
         # 状態
         if cap and going >= cap:
             chip, fill, color = "満員", RED, WHITE
@@ -277,9 +270,9 @@ def status_image(month: int, events: list[dict], size: str = "feed") -> bytes:
             chip, fill, color = "募集中", BRAND, INK
         cw = text_w(d, chip, font(36)) + 44
         pill(d, right - cw, top + 124, chip, font(36), fill, color, pad_x=22, h=64)
-        # 進み具合のバー
+        # 埋まり具合のバー（人数の数字は出さない）
         if cap:
-            by = top + 214
+            by = top + 204
             d.rounded_rectangle((x0, by, right, by + 26), 13, fill=GREY, outline=INK, width=3)
             filled = x0 + (right - x0) * min(1, going / cap)
             if going:
