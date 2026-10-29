@@ -1235,8 +1235,10 @@ def render_events(data: dict, me: dict | None) -> None:
         md('<div class="ev-empty">次の練習会はまだ決まっていません。お楽しみに！</div>')
     for ev in upcoming:
         render_event(data, ev, me)
-    if past:
-        with st.expander(f"終了した練習会（{len(past)}件）"):
+    # 終了した練習会は管理者だけに見せる（👑 管理者としてログイン中、または管理者メニューにログイン中）
+    is_admin = (me is not None and me["id"] in admin_member_ids(data)) or st.session_state.get("is_admin")
+    if past and is_admin:
+        with st.expander(f"🔒 終了した練習会（{len(past)}件・管理者のみ表示）"):
             for ev in reversed(past[-10:]):
                 render_event(data, ev, me, past=True)
 
