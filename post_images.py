@@ -313,6 +313,7 @@ def caption(year: int, month: int, events: list[dict], venue_name: str = "", ven
         "🔰 初心者・未経験の方も大歓迎！パドル無料貸出🆓",
         "✍️ 参加登録はプロフィールのリンクから",
         "",
-        "#八女 #八女市 #ピックルボール #pickleball #YAMEPICK #福岡 #福岡ピックルボール #スポーツ #運動不足解消",
+        # ピックルボールに興味がある人に届きやすいハッシュタグを5つ
+        "#ピックルボール #pickleball #ピックルボール好きと繋がりたい #ピックルボール初心者 #pickleballjapan",
     ]
     return "\n".join(lines)

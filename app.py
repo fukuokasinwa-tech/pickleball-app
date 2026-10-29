@@ -1472,7 +1472,7 @@ def admin_share() -> None:
             st.code("🏓 練習会の日程・出欠はプロフィールのリンクから！\n"
                     "お名前を登録して「参加する」を押すだけ✨\n"
                     "初心者・未経験の方も大歓迎🙌 パドル無料貸出🆓\n"
-                    "#八女 #ピックルボール #YAMEPICK",
+                    "#ピックルボール #pickleball #ピックルボール好きと繋がりたい #ピックルボール初心者 #pickleballjapan",
                     language=None, wrap_lines=True)
 
 
