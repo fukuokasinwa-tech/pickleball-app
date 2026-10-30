@@ -683,6 +683,7 @@ a.pk-insta .ig { font-size: 1.1rem; }
 # ---------------------------------------------------------------------------
 
 LOGO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+FLYER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flyer")  # 配布用チラシ（PDF と確認用 PNG）
 
 
 @st.cache_data(show_spinner=False)
@@ -1238,7 +1239,7 @@ def render_events(data: dict, me: dict | None) -> None:
     # 終了した練習会は管理者だけに見せる（👑 管理者としてログイン中、または管理者メニューにログイン中）
     is_admin = (me is not None and me["id"] in admin_member_ids(data)) or st.session_state.get("is_admin")
     if past and is_admin:
-        with st.expander(f"🔒 終了した練習会（{len(past)}件・管理者のみ表示）"):
+        with st.expander(f"🔒 終了した練習会（{len(past)}件・管理者のみ表示）", key="past_events"):
             for ev in reversed(past[-10:]):
                 render_event(data, ev, me, past=True)
 
@@ -1284,7 +1285,8 @@ def render_admin(data: dict, me: dict | None) -> None:
     if not can_see_admin(data, me):
         return
     md('<div class="pk-h">ADMIN</div>')
-    with st.expander("🔧 管理者メニュー"):
+    # key を付けて、上の欄が増えたり減ったりしても開いた状態を保つ
+    with st.expander("🔧 管理者メニュー", key="admin_menu"):
         if not admin_member_ids(data):
             st.info("管理者がまだ決まっていないため、全員に表示されています。"
                     "ログイン後「👥 メンバー」で「👑 管理者にする」を押すと、管理者の人にだけ表示されるようになります。")
@@ -1297,9 +1299,9 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t10, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "🖼 投稿画像", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方", "🎯 テーマ", "✅ 出欠",
-             "👥 メンバー", "📊 CSV"])
+        t1, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方", "🎯 テーマ",
+             "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
@@ -1310,6 +1312,8 @@ def render_admin(data: dict, me: dict | None) -> None:
             admin_access(data)
         with t10:
             admin_post_images(data)
+        with t11:
+            admin_flyers()
         with t6:
             admin_howto(data)
         with t7:
@@ -1750,6 +1754,41 @@ def admin_post_images(data: dict) -> None:
     md("**③ 投稿文**（右上の📋でコピー）")
     st.code(post_images.caption(y, m, events, setting(data, "access_name"), setting(data, "access_address")),
             language=None, wrap_lines=True)
+
+
+@st.cache_data(show_spinner=False, max_entries=10)
+def flyer_preview(path: str, mtime: float) -> bytes:
+    """チラシの確認用画像を、画面に出しやすい大きさの JPEG にする（mtime はファイルが変わったら作り直すため）。"""
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    im.thumbnail((1400, 1400))
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=85)
+    return buf.getvalue()
+
+
+def admin_flyers() -> None:
+    st.caption("配布用のチラシです。PDF を A4・横向き・倍率100%で印刷し、真ん中で切ると A5 のチラシが2枚になります。"
+               "コンビニのネットプリントでも印刷できます。")
+    pdfs = sorted(f for f in os.listdir(FLYER_DIR) if f.endswith(".pdf")) if os.path.isdir(FLYER_DIR) else []
+    if not pdfs:
+        st.info("保存されているチラシはありません。")
+        return
+    for name in pdfs:
+        pdf_path = os.path.join(FLYER_DIR, name)
+        png_path = pdf_path[:-4] + ".png"
+        with st.container(border=True):
+            md(f"**📄 {esc(name)}**")
+            if os.path.exists(png_path):
+                st.image(flyer_preview(png_path, os.path.getmtime(png_path)), width="stretch")
+            with open(pdf_path, "rb") as f:
+                st.download_button("📥 印刷用PDFを保存", f.read(), file_name=name, mime="application/pdf",
+                                   width="stretch", key=f"flyer_pdf_{name}")
+            if os.path.exists(png_path):
+                with open(png_path, "rb") as f:
+                    st.download_button("📥 画像（PNG）を保存", f.read(), file_name=os.path.basename(png_path),
+                                       mime="image/png", width="stretch", key=f"flyer_png_{name}")
+    st.caption("文章やデザインを変えたいときは、Claude に依頼してください（flyer/build_flyer.py で作り直します）。")
 
 
 def admin_access(data: dict) -> None:
