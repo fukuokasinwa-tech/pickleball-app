@@ -119,11 +119,6 @@ body {
 }
 /* A5（148.5 x 210mm）を左右に2枚。家庭用プリンタの余白で切れないよう、内側に余白をとる */
 .flyer { width: 148.5mm; height: 210mm; padding: 6mm; position: relative; }
-.flyer + .flyer::before {
-  content: "✂ ここで切る"; position: absolute; left: -0.2mm; top: 0; bottom: 0; width: 0;
-  border-left: 0.4mm dashed #999; font-size: 2.6mm; color: #999; writing-mode: vertical-rl;
-  padding-top: 3mm; text-indent: 1mm;
-}
 .card {
   height: 100%; border: 0.9mm solid var(--ink); border-radius: 6mm; overflow: hidden;
   display: flex; flex-direction: column; background: var(--bg);
