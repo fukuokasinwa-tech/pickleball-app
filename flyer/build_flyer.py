@@ -46,6 +46,7 @@ CONTENT = {
         ("📍", "場所", "旧忠見小学校 体育館（八女市忠見980）"),
         ("💰", "参加費", "はじめての方 1,000円 ／ 2回目から 500円"),
         ("👟", "持ち物", "動きやすい服装・室内シューズ・飲み物"),
+        ("🙆", "参加", "<b>1回だけの単発参加もOK！</b> お気軽にご参加ください"),
     ],
     "qr_entry": "日程・参加登録",
     "qr_insta": "Instagram",
@@ -123,7 +124,7 @@ body {
   height: 100%; border: 0.9mm solid var(--ink); border-radius: 6mm; overflow: hidden;
   display: flex; flex-direction: column; background: var(--bg);
 }
-.hero { flex: none; background: var(--ink); color: #fff; padding: 5.5mm 7mm 5mm; position: relative; overflow: hidden; }
+.hero { flex: none; background: var(--ink); color: #fff; padding: 5mm 7mm 4.5mm; position: relative; overflow: hidden; }
 .ball {
   position: absolute; right: -16mm; top: -16mm; width: 56mm; height: 56mm; border-radius: 50%;
   background: radial-gradient(circle, rgba(254,151,26,.38), rgba(254,151,26,0) 68%);
@@ -133,13 +134,13 @@ body {
 .kicker { color: var(--brand); font-size: 2.9mm; letter-spacing: .12em; font-weight: 900; }
 h1 { font-weight: 900; font-size: 10.2mm; line-height: 1.18; margin-top: 2mm; letter-spacing: .01em; }
 h1 .o { color: var(--brand); }
-.lead { margin-top: 2.6mm; font-size: 4.2mm; color: #eee; }
-.body { flex: 1; min-height: 0; padding: 4mm 6mm 3.5mm; display: flex; flex-direction: column; justify-content: space-between; gap: 2.4mm; }
+.lead { margin-top: 2mm; font-size: 4.2mm; color: #eee; }
+.body { flex: 1; min-height: 0; padding: 3.6mm 6mm 3.6mm; display: flex; flex-direction: column; justify-content: space-between; gap: 2mm; }
 .what { background: #fff; border: 0.6mm solid var(--ink); border-radius: 4mm; padding: 2.6mm 4mm;
         box-shadow: 1.2mm 1.5mm 0 var(--brand); }
 h2 { font-size: 4.6mm; font-weight: 900; margin-bottom: 1.2mm; }
 h2::before { content: "🏓 "; }
-.what p { font-size: 3.25mm; line-height: 1.6; }
+.what p { font-size: 3.2mm; line-height: 1.55; }
 .what b { background: linear-gradient(transparent 55%, rgba(254,151,26,.55) 55%); font-weight: 900; }
 .points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.4mm; }
 .point { background: var(--brand); border: 0.6mm solid var(--ink); border-radius: 4mm; padding: 2mm 2mm;
@@ -151,10 +152,11 @@ h2::before { content: "🏓 "; }
 .theme span { display: inline-block; background: var(--ink); color: var(--brand); border-radius: 99mm;
               padding: .6mm 2.6mm; margin: 0 .7mm; }
 .info { width: 100%; background: #fff; border: 0.6mm solid var(--ink); border-radius: 4mm; border-collapse: separate;
-        padding: 1.8mm 3mm; font-size: 3.05mm; line-height: 1.45; }
+        padding: 1.6mm 3mm; font-size: 3.05mm; line-height: 1.4; }
 .info th { white-space: nowrap; text-align: left; padding: .6mm 2mm .6mm .6mm; font-weight: 900; vertical-align: top; }
 .info td { padding: .6mm 0; vertical-align: top; }
 .info .ii { width: 5mm; }
+.info b { font-weight: 900; background: linear-gradient(transparent 55%, rgba(254,151,26,.55) 55%); }
 .cta { display: flex; gap: 2.4mm; align-items: center; background: var(--ink); border-radius: 4mm; padding: 2.6mm 3mm; }
 .cta-text { flex: 1; color: #fff; }
 .cta .c1 { font-size: 3.2mm; }
