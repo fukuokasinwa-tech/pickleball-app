@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 import gspread
 import streamlit as st
 
+import matchmaker
 import post_images
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -629,6 +630,20 @@ a.pk-map-btn {
   color: var(--ink) !important; font-weight: 900; text-decoration: none !important; white-space: nowrap;
   border: 2.5px solid var(--ink); box-shadow: 3px 4px 0 var(--ink); font-size: .95rem;
 }
+
+/* ---- 対戦表 ---- */
+.mt-round { background: #fff; border: 2.5px solid var(--ink); border-radius: 14px; padding: 8px 12px; margin: 0 6px 10px 0;
+            box-shadow: 3px 4px 0 var(--brand); }
+.mt-no { font-weight: 900; margin-bottom: 4px; }
+.mt-court { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 0; border-top: 1px dashed #ddd;
+            font-weight: 800; }
+.mt-cno { background: var(--brand); border: 2px solid var(--ink); border-radius: 999px; padding: 0 8px; font-size: .78rem; }
+.mt-team { white-space: nowrap; }
+.mt-vs { color: var(--red); font-weight: 900; font-size: .85rem; }
+.mt-rest { color: var(--sub); font-size: .85rem; font-weight: 700; margin-top: 4px; }
+.mt-note { color: var(--sub); font-size: .75rem; font-weight: 700; }
+.mt-pair { display: inline-block; background: var(--ink); color: var(--brand); border-radius: 6px; padding: 0 6px;
+           margin-right: 4px; font-size: .8rem; font-weight: 900; }
 
 /* ---- ギャラリー ---- */
 [class*="st-key-gal_"] {
@@ -1299,9 +1314,9 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方", "🎯 テーマ",
-             "✅ 出欠", "👥 メンバー", "📊 CSV"])
+        t1, t12, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "🎾 対戦表", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方",
+             "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
         with t2:
@@ -1314,6 +1329,8 @@ def render_admin(data: dict, me: dict | None) -> None:
             admin_post_images(data)
         with t11:
             admin_flyers()
+        with t12:
+            admin_matches(data)
         with t6:
             admin_howto(data)
         with t7:
@@ -1754,6 +1771,191 @@ def admin_post_images(data: dict) -> None:
     md("**③ 投稿文**（右上の📋でコピー）")
     st.code(post_images.caption(y, m, events, setting(data, "access_name"), setting(data, "access_address")),
             language=None, wrap_lines=True)
+
+
+# ---------------------------------------------------------------------------
+# 対戦表（ダブルスの組み合わせ）
+# ---------------------------------------------------------------------------
+
+def match_key(event_id: str) -> str:
+    return f"match_{event_id}"
+
+
+def load_match(data: dict, event_id: str) -> dict:
+    """練習会ごとの対戦表の設定（settings シートに JSON で保存）。"""
+    cfg = {"walkins": [], "excluded": [], "fee_normal": 500, "fee_first": 1000, "mode": "rotation",
+           "courts": 2, "rounds": 0, "seed": 1, "players": [], "plan": [], "pairs": [], "paid": []}
+    if row := find(data["settings"], match_key(event_id)):
+        try:
+            cfg |= json.loads(row["value"])
+        except ValueError:
+            pass
+    return cfg
+
+
+def save_match(event_id: str, cfg: dict) -> None:
+    key, value = match_key(event_id), json.dumps(cfg, ensure_ascii=False)
+    if key in _call(_ws("settings").col_values, 1):
+        _update("settings", key, {"value": value})
+    else:
+        _append("settings", {"id": key, "value": value})
+
+
+def match_people(data: dict, ev: dict, cfg: dict) -> list[dict]:
+    """対戦表に入れる人：「参加する」を押した人（家族を含む）＋ 当日参加の人。"""
+    members = {m["id"]: m for m in data["members"]}
+    people = []
+    for a in event_rows(data, ev["id"], "attending"):
+        if m := members.get(a["member_id"]):
+            people.append({"id": m["id"], "name": m["name"], "first": is_first_time(data, m["id"], ev), "walkin": False})
+    names = {p["name"] for p in people}
+    for w in cfg["walkins"]:
+        name = w["name"] if w["name"] not in names else f"{w['name']}（当日）"
+        people.append({"id": f"w:{w['name']}", "name": name, "first": w.get("first", False), "walkin": True})
+        names.add(name)
+    return people
+
+
+def match_html(plan: list[dict], pairs: list[list[str]]) -> str:
+    def team(t: list[str]) -> str:
+        if pairs:  # 固定ペアはペア名（A, B, …）も出す
+            idx = next((i for i, pr in enumerate(pairs) if pr == t), None)
+            tag = f'<span class="mt-pair">{chr(65 + idx)}</span>' if idx is not None else ""
+            three = '<span class="mt-note">（3人で交代）</span>' if len(t) == 3 else ""
+            return f'{tag}{"・".join(esc(p) for p in t)}{three}'
+        return "・".join(esc(p) for p in t)
+
+    out = []
+    for i, rnd in enumerate(plan, 1):
+        rows = "".join(f'<div class="mt-court"><span class="mt-cno">コート{c}</span>'
+                       f'<span class="mt-team">{team(m["team1"])}</span><span class="mt-vs">vs</span>'
+                       f'<span class="mt-team">{team(m["team2"])}</span></div>'
+                       for c, m in enumerate(rnd["courts"], 1))
+        rest = f'<div class="mt-rest">休み：{"、".join(esc(p) for p in rnd["rest"])}</div>' if rnd["rest"] else ""
+        out.append(f'<div class="mt-round"><div class="mt-no">第{i}試合</div>{rows}{rest}</div>')
+    return "".join(out)
+
+
+def admin_matches(data: dict) -> None:
+    st.caption("練習会に「参加する」を押した人と当日参加の人で、ダブルスの組み合わせと対戦表を作ります。")
+    if not data["events"]:
+        st.info("練習会がありません。「📅 練習会」で作成してください。")
+        return
+    events = sorted(data["events"], key=lambda e: e["date"])
+    upcoming = [e for e in events if e["date"] >= today()]
+    default = (upcoming[0] if upcoming else events[-1])["id"]
+    ids = [e["id"] for e in reversed(events)]
+    labels = {e["id"]: f"{short_date(e['date'])}（{WEEKDAYS[date.fromisoformat(e['date']).weekday()][0]}）{e['title']}"
+              for e in events}
+    eid = st.selectbox("練習会", ids, index=ids.index(default), format_func=labels.get, key="mt_event")
+    ev = find(data["events"], eid)
+    cfg = load_match(data, eid)
+    people = match_people(data, ev, cfg)
+
+    # ---- ① 参加者 ----
+    md("**① 参加者**（来なかった人はチェックを外す）")
+    if not people:
+        st.caption("まだ参加者がいません。下の「当日参加の追加」で追加できます。")
+    included = []
+    cols = st.columns(2)
+    for i, p in enumerate(people):
+        label = p["name"] + (" 🔰" if p["first"] else "") + (" （当日）" if p["walkin"] and "（当日）" not in p["name"] else "")
+        if cols[i % 2].checkbox(label, value=p["id"] not in cfg["excluded"], key=f"mt_in_{eid}_{p['id']}"):
+            included.append(p)
+    excluded = [p["id"] for p in people if p not in included]
+    md(f"**参加 {len(included)}人**　（登録 {sum(not p['walkin'] for p in included)}人・当日 "
+       f"{sum(p['walkin'] for p in included)}人）")
+
+    with st.expander("➕ 当日参加の追加（登録していない人・急に来た人）"):
+        with st.form(f"mt_walkin_{eid}", clear_on_submit=True):
+            c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
+            name = c1.text_input("お名前", max_chars=20)
+            first = c2.checkbox("初参加")
+            add = st.form_submit_button("追加する", type="primary", width="stretch")
+        if add:
+            if not name.strip():
+                st.warning("お名前を入力してください。")
+            elif any(w["name"] == name.strip() for w in cfg["walkins"]):
+                st.warning("その名前はもう追加されています。")
+            else:
+                cfg["walkins"].append({"name": name.strip(), "first": first})
+                cfg["excluded"] = excluded
+                save_match(eid, cfg)
+                st.session_state["flash"] = f"{name.strip()} さんを追加しました。"
+                st.rerun()
+        for w in cfg["walkins"]:
+            c1, c2 = st.columns([4, 1], vertical_alignment="center")
+            c1.write(f"👤 {w['name']}" + (" 🔰" if w.get("first") else ""))
+            if c2.button("削除", key=f"mt_wdel_{eid}_{w['name']}"):
+                cfg["walkins"] = [x for x in cfg["walkins"] if x["name"] != w["name"]]
+                save_match(eid, cfg)
+                st.rerun()
+
+    # ---- ② 参加費 ----
+    md("**② 参加費**")
+    c1, c2 = st.columns(2)
+    fee_normal = c1.number_input("通常（円）", min_value=0, step=100, value=int(cfg["fee_normal"]), key=f"mt_fee_n_{eid}")
+    fee_first = c2.number_input("初参加 🔰（円）", min_value=0, step=100, value=int(cfg["fee_first"]), key=f"mt_fee_f_{eid}")
+    total = sum(fee_first if p["first"] else fee_normal for p in included)
+    paid = [p for p in included if p["name"] in cfg["paid"]]
+    collected = sum(fee_first if p["first"] else fee_normal for p in paid)
+    with st.expander(f"💰 合計 {total:,}円（{len(included)}人）　集金済み {collected:,}円（{len(paid)}人）"):
+        for p in included:
+            c1, c2 = st.columns([3, 2], vertical_alignment="center")
+            fee = fee_first if p["first"] else fee_normal
+            c1.write(f"{p['name']}{' 🔰' if p['first'] else ''}　{fee:,}円")
+            done = c2.checkbox("集金済み", value=p["name"] in cfg["paid"], key=f"mt_paid_{eid}_{p['id']}")
+            if done != (p["name"] in cfg["paid"]):
+                cfg["paid"] = sorted(set(cfg["paid"]) ^ {p["name"]})
+                cfg |= {"fee_normal": fee_normal, "fee_first": fee_first, "excluded": excluded}
+                save_match(eid, cfg)
+                st.rerun()
+
+    # 参加者のチェックや参加費を変えたら、その場で保存しておく
+    if (fee_normal, fee_first, sorted(excluded)) != (cfg["fee_normal"], cfg["fee_first"], sorted(cfg["excluded"])):
+        cfg |= {"fee_normal": fee_normal, "fee_first": fee_first, "excluded": excluded}
+        save_match(eid, cfg)
+
+    # ---- ③ 対戦表 ----
+    md("**③ 対戦表**（ダブルス）")
+    names = [p["name"] for p in included]
+    c1, c2, c3 = st.columns([2, 1, 1])
+    mode = c1.radio("形式", ["rotation", "fixed"], index=0 if cfg["mode"] == "rotation" else 1, key=f"mt_mode_{eid}",
+                    format_func={"rotation": "ローテーション（毎試合ペアが変わる）", "fixed": "固定ペア（ペアで総当たり）"}.get)
+    courts = c2.number_input("コート数", min_value=1, max_value=4, value=int(cfg["courts"]), key=f"mt_courts_{eid}")
+    rounds = c3.number_input("試合数", min_value=1, max_value=30, key=f"mt_rounds_{eid}",
+                             value=int(cfg["rounds"]) or max(1, matchmaker.default_rounds(len(names), courts)))
+    if len(names) < 4:
+        st.info("ダブルスの試合には4人以上が必要です。")
+    b1, b2 = st.columns(2)
+    make = b1.button("🎾 対戦表を作る", type="primary", width="stretch", key=f"mt_make_{eid}", disabled=len(names) < 4)
+    again = b2.button("🔀 組み直す", width="stretch", key=f"mt_again_{eid}", disabled=len(names) < 4 or not cfg["plan"])
+    if make or again:
+        seed = cfg["seed"] + 1 if again else cfg["seed"]
+        if mode == "rotation":
+            pairs, plan = [], matchmaker.rotation(names, rounds, courts, seed)
+        else:
+            pairs, plan = matchmaker.fixed_pairs(names, rounds, courts, seed)
+        cfg |= {"mode": mode, "courts": courts, "rounds": rounds, "seed": seed, "players": names, "plan": plan,
+                "pairs": pairs, "excluded": excluded, "fee_normal": fee_normal, "fee_first": fee_first}
+        save_match(eid, cfg)
+        st.session_state["flash"] = "対戦表を作りました。" if make else "組み直しました。"
+        st.rerun()
+
+    if not cfg["plan"]:
+        return
+    if sorted(cfg["players"]) != sorted(names):
+        st.warning("対戦表を作ったあとに参加者が変わりました。「🎾 対戦表を作る」で作り直してください。")
+    if cfg["pairs"]:
+        md("**ペア**　" + "　".join(f'<span class="mt-pair">{chr(65 + i)}</span>{"・".join(esc(p) for p in pr)}'
+                                    + ('<span class="mt-note">（3人で交代）</span>' if len(pr) == 3 else "")
+                                    for i, pr in enumerate(cfg["pairs"])))
+    md(match_html(cfg["plan"], cfg["pairs"]))
+    stats = matchmaker.summary(cfg["players"], cfg["plan"])
+    with st.expander("📊 一人ずつの試合数・休み"):
+        md("<br>".join(f"{esc(p)}：{s['games']}試合・休み{s['rest']}回" for p, s in stats.items()))
+    md("**LINE に貼る文章**（右上の📋でコピー）")
+    st.code(matchmaker.plan_text(labels[eid], cfg["plan"], cfg["pairs"]), language=None, wrap_lines=True)
 
 
 @st.cache_data(show_spinner=False, max_entries=10)
