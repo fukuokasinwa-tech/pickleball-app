@@ -13,7 +13,7 @@ permissions:
 jobs:
   wake:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       APP_URL: https://pickleball-app-4vdhbkkfrztdscguvjgqja.streamlit.app
     steps:
@@ -32,5 +32,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wake-failed
-          path: wake_failed.png
+          path: |
+            wake_failed.png
+            wake_failed.html
           if-no-files-found: ignore
