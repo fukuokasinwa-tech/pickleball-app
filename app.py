@@ -29,6 +29,7 @@ import streamlit as st
 
 import matchmaker
 import post_images
+import sales_report
 
 JST = ZoneInfo("Asia/Tokyo")
 WEEKDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日", "日曜日"]
@@ -1314,8 +1315,8 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t12, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "🎾 対戦表", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方",
+        t1, t12, t13, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", "🎾 対戦表", "💴 売上表", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方",
              "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
@@ -1331,6 +1332,8 @@ def render_admin(data: dict, me: dict | None) -> None:
             admin_flyers()
         with t12:
             admin_matches(data)
+        with t13:
+            admin_sales(data)
         with t6:
             admin_howto(data)
         with t7:
@@ -1956,6 +1959,118 @@ def admin_matches(data: dict) -> None:
         md("<br>".join(f"{esc(p)}：{s['games']}試合・休み{s['rest']}回" for p, s in stats.items()))
     md("**LINE に貼る文章**（右上の📋でコピー）")
     st.code(matchmaker.plan_text(labels[eid], cfg["plan"], cfg["pairs"]), language=None, wrap_lines=True)
+
+
+# ---------------------------------------------------------------------------
+# 売上表（授産売上金提出表）
+# ---------------------------------------------------------------------------
+
+SALES_KEY = "sales_cfg"
+SALES_DEST = "ピックルボール練習会・体験会"
+
+
+def load_sales(data: dict) -> dict:
+    """売上表の設定（事業所名・No.・手で直した売上金・備考など）。settings シートに JSON で保存。"""
+    cfg = {"office": "2101　Ｌｉｎｋ", "no": "", "amounts": {}, "notes": {}, "dests": {}, "excluded": []}
+    if row := find(data["settings"], SALES_KEY):
+        try:
+            cfg |= json.loads(row["value"])
+        except ValueError:
+            pass
+    return cfg
+
+
+def auto_sales(data: dict, ev: dict) -> int:
+    """その日の売上金の自動計算：🎾 対戦表の参加者（来なかった人を除く・当日参加を含む）× 参加費。"""
+    cfg = load_match(data, ev["id"])
+    people = [p for p in match_people(data, ev, cfg) if p["id"] not in cfg["excluded"]]
+    return sum(int(cfg["fee_first"]) if p["first"] else int(cfg["fee_normal"]) for p in people)
+
+
+def admin_sales(data: dict) -> None:
+    st.caption("練習会ごとの売上金をまとめて、授産売上金提出表（Excel・A4縦）を作ります。"
+               "売上金は「🎾 対戦表」の参加者と参加費から自動で入ります。表の「売上金」を押すと直接書き換えられます。")
+    cfg = load_sales(data)
+    t = date.fromisoformat(today())
+    c1, c2 = st.columns(2)
+    start = c1.date_input("期間（はじめ）", value=t.replace(day=1), format="YYYY/MM/DD", key="sl_start")
+    end = c2.date_input("期間（おわり）", value=t, format="YYYY/MM/DD", key="sl_end")
+    c1, c2, c3 = st.columns([1.2, 2, 1])
+    submit = c1.date_input("提出日", value=t, format="YYYY/MM/DD", key="sl_submit")
+    office = c2.text_input("事業所名", value=cfg["office"], key="sl_office")
+    no = c3.text_input("No.", value=str(cfg["no"]), key="sl_no")
+
+    events = sorted((e for e in data["events"] if start.isoformat() <= e["date"] <= end.isoformat()),
+                    key=lambda e: (e["date"], start_time(e.get("time", ""))))
+    if not events:
+        st.info("この期間に練習会はありません。")
+        return
+    autos = {e["id"]: auto_sales(data, e) for e in events}
+    base = [{"含める": e["id"] not in cfg["excluded"],
+             "受領日": date.fromisoformat(e["date"]),
+             "売上先": cfg["dests"].get(e["id"], SALES_DEST),
+             "売上金": int(cfg["amounts"].get(e["id"], autos[e["id"]])),
+             "自動計算": autos[e["id"]],
+             "備考": cfg["notes"].get(e["id"], "")} for e in events]
+    editor_key = f"sl_table_{start}_{end}"
+    edited = st.data_editor(
+        base, key=editor_key, hide_index=True, width="stretch", num_rows="fixed",
+        disabled=["受領日", "自動計算"],
+        column_config={
+            "含める": st.column_config.CheckboxColumn("含める", width="small"),
+            "受領日": st.column_config.DateColumn("受領日", format="YYYY-MM-DD"),
+            "売上先": st.column_config.TextColumn("売上先", width="medium"),
+            "売上金": st.column_config.NumberColumn("売上金（円）✏️", min_value=0, step=100, format="%,d"),
+            "自動計算": st.column_config.NumberColumn("自動計算", format="%,d", help="対戦表の参加者 × 参加費"),
+            "備考": st.column_config.TextColumn("備考"),
+        })
+    rows = [{"date": r["受領日"], "dest": r["売上先"] or "", "amount": int(r["売上金"] or 0), "note": r["備考"] or ""}
+            for r in edited if r["含める"]]
+    total = sum(r["amount"] for r in rows)
+    md(f"**提出金合計　{total:,}円**（{len(rows)}日分）")
+    manual = [(e, int(r["売上金"] or 0)) for e, r in zip(events, edited) if int(r["売上金"] or 0) != autos[e["id"]]]
+    if manual:
+        st.caption("✏️ 手入力：" + "、".join(f"{short_date(e['date'])} {a:,}円（自動 {autos[e['id']]:,}円）"
+                                            for e, a in manual))
+
+    b1, b2, b3 = st.columns(3)
+    if b1.button("💾 保存", type="primary", width="stretch", key="sl_save"):
+        for e, r in zip(events, edited):
+            eid, amount = e["id"], int(r["売上金"] or 0)
+            # 自動計算と同じ金額なら手入力を消して、あとで参加者が変わっても自動で反映されるようにする
+            if amount == autos[eid]:
+                cfg["amounts"].pop(eid, None)
+            else:
+                cfg["amounts"][eid] = amount
+            for field, col, default in (("notes", "備考", ""), ("dests", "売上先", SALES_DEST)):
+                value = (r[col] or "").strip()
+                if value in ("", default):
+                    cfg[field].pop(eid, None)
+                else:
+                    cfg[field][eid] = value
+            if r["含める"]:
+                cfg["excluded"] = [x for x in cfg["excluded"] if x != eid]
+            elif eid not in cfg["excluded"]:
+                cfg["excluded"].append(eid)
+        cfg |= {"office": office, "no": no}
+        save_setting(data, SALES_KEY, json.dumps(cfg, ensure_ascii=False))
+        st.session_state.pop(editor_key, None)
+        st.session_state["flash"] = "売上表を保存しました。"
+        st.rerun()
+    if b2.button("↩ 自動計算に戻す", width="stretch", key="sl_reset",
+                 help="この期間の手入力した売上金を消して、自動計算の金額に戻します"):
+        for e in events:
+            cfg["amounts"].pop(e["id"], None)
+        save_setting(data, SALES_KEY, json.dumps(cfg, ensure_ascii=False))
+        st.session_state.pop(editor_key, None)
+        st.session_state["flash"] = "自動計算の金額に戻しました。"
+        st.rerun()
+    xlsx = sales_report.build_xlsx(submit, office, no, rows)
+    b3.download_button("📥 Excelで保存", xlsx, width="stretch", key="sl_xlsx",
+                       file_name=f"授産売上金提出表_{submit:%Y%m%d}.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.caption("Excel は A4・縦向きで1ページに収まるように設定してあります。開いて「印刷」するだけで使えます。"
+               "合計は計算式なので、Excel で金額を直しても自動で変わります。")
 
 
 @st.cache_data(show_spinner=False, max_entries=10)
