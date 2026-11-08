@@ -1987,6 +1987,145 @@ def auto_sales(data: dict, ev: dict) -> int:
     return sum(int(cfg["fee_first"]) if p["first"] else int(cfg["fee_normal"]) for p in people)
 
 
+KANSUJI = {"〇": 0, "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+KANSUJI_UNIT = {"十": 10, "百": 100, "千": 1000}
+
+
+def _kansuji_value(tok: str) -> int:
+    total = section = num = 0
+    for ch in tok:
+        if ch.isdigit():
+            num = num * 10 + int(ch)
+        elif ch in KANSUJI:
+            num = num * 10 + KANSUJI[ch]
+        elif ch in KANSUJI_UNIT:
+            section += (num or 1) * KANSUJI_UNIT[ch]
+            num = 0
+        elif ch == "万":
+            total += (section + num or 1) * 10000
+            section = num = 0
+    return total + section + num
+
+
+def normalize_numbers(text: str) -> str:
+    """音声入力の文を、数字を半角にそろえる（「六千五百円」「6千500円」「６，５００円」→「6500円」）。"""
+    text = text.translate(str.maketrans("０１２３４５６７８９，", "0123456789,")).replace(",", "")
+    return re.sub(r"[0-9〇零一二三四五六七八九十百千万]+", lambda m: str(_kansuji_value(m.group())), text)
+
+
+def parse_sales_voice(text: str, events: list[dict]) -> tuple[dict | None, int | None, str | None, str]:
+    """「11月7日 6500円 備考 現金」のような文から（練習会, 売上金, 備考, エラー文）を取り出す。"""
+    t = normalize_numbers(text)
+    note = None
+    if m := re.search(r"(備考|メモ)[はを:：、,\s]*(.*)$", t):
+        note, t = m.group(2).strip(" 。"), t[:m.start()]
+    ev = None
+    if m := re.search(r"(?:(\d{1,2})月)?(\d{1,2})日", t):
+        month, day = (int(m.group(1)) if m.group(1) else None), int(m.group(2))
+        hits = [e for e in events if date.fromisoformat(e["date"]).day == day
+                and (month is None or date.fromisoformat(e["date"]).month == month)]
+        if not hits:
+            return None, None, None, f"「{m.group()}」の練習会が、選んでいる期間にありません。"
+        ev, t = hits[-1], t[:m.start()] + " " + t[m.end():]
+    elif len(events) == 1:
+        ev = events[0]
+    else:
+        return None, None, None, "日付がわかりませんでした。「11月7日 6500円」のように日付も言ってください。"
+    amount = None
+    if m := re.search(r"(\d+)\s*円", t) or re.search(r"(\d+)", t):
+        amount = int(m.group(1))
+    if amount is None and note is None:
+        return None, None, None, "金額がわかりませんでした。「6500円」のように言ってください。"
+    return ev, amount, note, ""
+
+
+def voice_box(label: str, key: str, placeholder: str) -> None:
+    """🎤ボタン（ブラウザの音声認識）＋ 聞き取った文が入る入力欄。キーボードで打ってもよい。"""
+    st.html(f"""<div class="pk-mic-wrap">
+<button type="button" class="pk-mic" data-target="{esc(label)}">🎤 話して入力</button>
+<span class="pk-mic-st"></span></div>
+<style>
+.pk-mic {{ background:#FE971A; color:#111; border:3px solid #111; border-radius:999px; padding:8px 20px;
+          font-weight:800; font-size:16px; box-shadow:3px 4px 0 #111; cursor:pointer; }}
+.pk-mic.on {{ background:#E60012; color:#fff; }}
+.pk-mic-st {{ margin-left:10px; font-size:14px; color:#555; }}
+</style>
+<script>
+(function () {{
+  function commit(labelText, text) {{
+    const el = [...document.querySelectorAll('input')].find(i => i.getAttribute('aria-label') === labelText);
+    if (!el) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    el.focus();
+    setter.call(el, text);
+    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+    el.dispatchEvent(new KeyboardEvent('keydown', {{ key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }}));
+    el.blur();
+    return true;
+  }}
+  window.pkVoiceCommit = commit;
+  document.querySelectorAll('.pk-mic').forEach(function (b) {{
+    if (b.dataset.bound) return;
+    b.dataset.bound = '1';
+    const st = b.parentElement.querySelector('.pk-mic-st');
+    b.addEventListener('click', function () {{
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {{ st.textContent = 'このブラウザは音声入力に対応していません。キーボードのマイクを使ってください。'; return; }}
+      const r = new SR();
+      r.lang = 'ja-JP'; r.interimResults = true; r.maxAlternatives = 1;
+      b.classList.add('on'); b.textContent = '🎙 聞いています…'; st.textContent = '';
+      r.onresult = function (e) {{
+        let text = '';
+        for (const res of e.results) text += res[0].transcript;
+        st.textContent = text;
+        if (e.results[e.results.length - 1].isFinal) commit(b.dataset.target, text);
+      }};
+      r.onerror = function (e) {{
+        st.textContent = e.error === 'not-allowed' ? 'マイクの使用を許可してください。' : '聞き取れませんでした。もう一度押してください。';
+      }};
+      r.onend = function () {{ b.classList.remove('on'); b.textContent = '🎤 話して入力'; }};
+      r.start();
+    }});
+  }});
+}})();
+</script>""", unsafe_allow_javascript=True)
+    st.text_input(label, key=key, placeholder=placeholder, on_change=_take_voice, args=(key,))
+
+
+def _take_voice(key: str) -> None:
+    st.session_state[key + "_cmd"] = st.session_state.get(key, "")
+    st.session_state[key] = ""
+
+
+def apply_sales_voice(data: dict, cfg: dict, events: list[dict], autos: dict) -> None:
+    text = st.session_state.pop("sl_voice_cmd", "").strip()
+    if not text:
+        return
+    ev, amount, note, err = parse_sales_voice(text, events)
+    if err:
+        st.warning(f"🎤「{text}」：{err}")
+        return
+    eid, done = ev["id"], []
+    if amount is not None:
+        if amount == autos[eid]:
+            cfg["amounts"].pop(eid, None)
+        else:
+            cfg["amounts"][eid] = amount
+        done.append(f"売上金 {amount:,}円")
+    if note is not None:
+        if note:
+            cfg["notes"][eid] = note
+        else:
+            cfg["notes"].pop(eid, None)
+        done.append(f"備考「{note}」")
+    cfg["excluded"] = [x for x in cfg["excluded"] if x != eid]
+    save_setting(data, SALES_KEY, json.dumps(cfg, ensure_ascii=False))
+    for k in [k for k in st.session_state if str(k).startswith("sl_table_")]:
+        del st.session_state[k]
+    st.session_state["flash"] = f"🎤 {short_date(ev['date'])} の" + "・".join(done) + "を入れました。"
+    st.rerun()
+
+
 def admin_sales(data: dict) -> None:
     st.caption("練習会ごとの売上金をまとめて、授産売上金提出表（Excel・A4縦）を作ります。"
                "売上金は「🎾 対戦表」の参加者と参加費から自動で入ります。表の「売上金」を押すと直接書き換えられます。")
@@ -2006,6 +2145,10 @@ def admin_sales(data: dict) -> None:
         st.info("この期間に練習会はありません。")
         return
     autos = {e["id"]: auto_sales(data, e) for e in events}
+    with st.container(border=True):
+        md("**🎤 声で入力**　例：「11月7日 6500円」「14日 4000円 備考 現金」")
+        voice_box("音声入力の内容", "sl_voice", "ここに聞き取った文が入ります（文字で打ってEnterでもOK）")
+        apply_sales_voice(data, cfg, events, autos)
     base = [{"含める": e["id"] not in cfg["excluded"],
              "受領日": date.fromisoformat(e["date"]),
              "売上先": cfg["dests"].get(e["id"], SALES_DEST),
