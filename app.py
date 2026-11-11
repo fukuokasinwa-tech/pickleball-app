@@ -38,16 +38,17 @@ SOURCES = ["友人・知人の紹介", "家族", "Instagram/SNS", "Web検索", "
 LEVELS = [(0, "ビギナー", "🌱"), (1, "ルーキー", "🥚"), (6, "プレイヤー", "🏓"), (15, "エース", "🔥"), (30, "レジェンド", "👑")]
 # 名前の横の生き物：参加するたびに成長する。どの生き物になるかは人ごとに決まる（登録IDから）
 CREATURES = [
-    ("とり", ["🥚", "🐣", "🐥", "🐤", "🐦", "🐓", "🦉", "🦅"]),
-    ("うみの生き物", ["🥚", "🦐", "🐟", "🐠", "🐡", "🐬", "🦈", "🐳"]),
-    ("きょうりゅう", ["🥚", "🦎", "🐊", "🐢", "🦕", "🦖", "🐲", "🐉"]),
-    ("どうぶつ", ["🥚", "🐁", "🐇", "🦝", "🦊", "🐺", "🐯", "🦁"]),
-    ("むし", ["🥚", "🐛", "🐜", "🐝", "🐞", "🦗", "🪲", "🦋"]),
-    ("こおりの生き物", ["🥚", "🐣", "🐧", "🦦", "🦭", "🐻‍❄️", "🦣", "🐋"]),
-    ("もりの生き物", ["🥚", "🐿️", "🦔", "🦡", "🦌", "🐗", "🦬", "🐻"]),
-    ("サバンナの生き物", ["🥚", "🦎", "🦩", "🦓", "🦒", "🦏", "🦛", "🐘"]),
+    ("とり", ["🥚", "🐣", "🐥", "🐤", "🐦", "🕊️", "🦜", "🦉", "🦢", "🦅"]),
+    ("うみの生き物", ["🥚", "🦐", "🐟", "🐠", "🐡", "🦑", "🐙", "🐬", "🦈", "🐳"]),
+    ("きょうりゅう", ["🥚", "🐸", "🦎", "🐍", "🐊", "🐢", "🦕", "🦖", "🐲", "🐉"]),
+    ("どうぶつ", ["🥚", "🐁", "🐇", "🐈", "🦝", "🦊", "🐺", "🐆", "🐯", "🦁"]),
+    ("むし", ["🥚", "🐛", "🐜", "🐌", "🐞", "🐝", "🦗", "🪲", "🦂", "🦋"]),
+    ("こおりの生き物", ["🥚", "🐣", "🐧", "🦦", "🦭", "🦌", "🦊", "🐻‍❄️", "🦣", "🐋"]),
+    ("もりの生き物", ["🥚", "🐿️", "🦔", "🦇", "🦡", "🦫", "🦌", "🐗", "🦬", "🐻"]),
+    ("サバンナの生き物", ["🥚", "🦎", "🦩", "🐒", "🦓", "🦒", "🦏", "🦛", "🦍", "🐘"]),
 ]
-GROW_AT = [1, 2, 3, 5, 8, 12, 18, 25]  # この回数参加すると次の姿になる
+# 参加するたびに1段階ずつ成長し、10回で完成。11回目からは2巡目で、次の生き物をマークつきで育てる
+ROUND_MARKS = ["", "⭐", "🌟", "👑", "💎"]
 # 練習会の時間の選択肢（30分おき・6:00〜22:00）
 TIME_SLOTS = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in (0, 30) if (h, m) <= (22, 0)]
 NEWS_CATEGORIES = {"お知らせ": ("📣", "info"), "大会情報": ("🏆", "event"), "その他": ("📝", "other")}
@@ -353,21 +354,33 @@ def level_of(count: int) -> tuple[tuple, tuple | None]:
     return cur, nxt
 
 
-def creature_kind(member_id: str) -> tuple[str, list[str]]:
-    return CREATURES[int(hashlib.md5(member_id.encode()).hexdigest(), 16) % len(CREATURES)]
+def creature_kind(member_id: str, rnd: int = 1) -> tuple[str, list[str]]:
+    """どの生き物を育てるか。人ごとに決まり、巡目が進むと次の生き物に変わる。"""
+    base = int(hashlib.md5(member_id.encode()).hexdigest(), 16) % len(CREATURES)
+    return CREATURES[(base + rnd - 1) % len(CREATURES)]
 
 
-def creature_step(count: int) -> int:
-    return max(0, sum(count >= n for n in GROW_AT) - 1)
+def creature_step(count: int) -> tuple[int, int]:
+    """（何巡目か 1〜, 何段階目か 0〜9）。参加0回は1巡目のたまご。"""
+    n = len(CREATURES[0][1])
+    if count <= 0:
+        return 1, 0
+    return (count - 1) // n + 1, (count - 1) % n
 
 
-def creature_of(member_id: str, count: int) -> tuple[str, str, int | None]:
-    """（いまの姿, 説明, 次に成長するまでの回数）を返す。"""
-    kind, stages = creature_kind(member_id)
-    step = creature_step(count)
-    nxt = GROW_AT[step + 1] - count if step + 1 < len(GROW_AT) else None
-    note = f"{kind}（{step + 1}/{len(stages)}）参加{count}回" + (f"・あと{nxt}回で成長" if nxt else "・最終形態！")
-    return stages[step], note, nxt
+def round_mark(rnd: int) -> str:
+    return ROUND_MARKS[min(rnd, len(ROUND_MARKS)) - 1]
+
+
+def creature_of(member_id: str, count: int) -> tuple[str, str, bool]:
+    """（名前の横に出す姿, 説明, 完成したか）を返す。"""
+    rnd, step = creature_step(count)
+    kind, stages = creature_kind(member_id, rnd)
+    done = step == len(stages) - 1
+    mark = round_mark(rnd)
+    note = (f"{kind}・{rnd}巡目{mark}（{step + 1}/{len(stages)}）参加{count}回"
+            + (f"・完成！次は{rnd + 1}巡目{round_mark(rnd + 1)}で新しい生き物" if done else f"・次の参加で成長"))
+    return stages[step] + mark, note, done
 
 
 def family_of(data: dict, member_id: str) -> list[dict]:
@@ -719,10 +732,13 @@ a.pk-insta .ig { font-size: 1.1rem; }
   .ev-top { grid-template-columns: 84px 1fr; }
   .ev-date .d { font-size: 2.6rem; }
 }
-.pk-grow-row { display: flex; align-items: center; flex-wrap: wrap; gap: 1px; margin: 4px 0 8px; }
-.pk-grow { font-size: 23px; opacity: .35; filter: grayscale(1); }
-.pk-grow.on { opacity: 1; filter: none; }
-.pk-grow-arrow { color: #999; font-size: 14px; margin: 0; }
+.pk-grow-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 4px 0 10px; }
+.pk-grow { display: flex; flex-direction: column; align-items: center; background: #F3F3EF; border-radius: 12px;
+           padding: 4px 0 2px; opacity: .45; }
+.pk-grow span { font-size: 26px; line-height: 1.2; filter: grayscale(1); }
+.pk-grow small { font-size: 11px; color: #666; }
+.pk-grow.on { opacity: 1; background: #FFF1DE; }
+.pk-grow.on span { filter: none; }
 </style>
 """
 
@@ -861,17 +877,21 @@ def render_hero(data: dict, me: dict | None) -> None:
                         st.session_state["flash"] = f"{name.strip()} さんを追加しました！"
                         st.rerun()
             count = play_count(data, me["id"])
-            icon, _, nxt = creature_of(me["id"], count)
+            icon, _, done = creature_of(me["id"], count)
             with st.popover(f"{icon} 成長"):
-                kind, stages = creature_kind(me["id"])
-                step = creature_step(count)
-                row = "".join(f'<span class="pk-grow{" on" if i <= step else ""}">{e if i <= step else "❔"}</span>'
-                              + ('<span class="pk-grow-arrow">›</span>' if i < len(stages) - 1 else "")
-                              for i, e in enumerate(stages))
-                md(f'<div class="pk-grow-row">{row}</div>')
-                md(f"**{kind}**　参加 **{count}** 回　" + (f"あと **{nxt}** 回で成長！" if nxt else "🎉 最終形態！"))
-                st.caption("練習会に参加するたびに、名前の横の生き物が成長します"
-                           f"（{'・'.join(map(str, GROW_AT))}回目）。どの生き物になるかは人によってちがいます。")
+                rnd, step = creature_step(count)
+                kind, stages = creature_kind(me["id"], rnd)
+                mark = round_mark(rnd)
+                # まだ育っていない先の姿は ❔ で隠す（育った分には巡目のマークがつく）
+                cells = "".join(
+                    f'<div class="pk-grow{" on" if i <= step else ""}"><span>{e if i <= step else "❔"}</span>'
+                    f'<small>{i + 1}{mark if i <= step else ""}</small></div>' for i, e in enumerate(stages))
+                md(f'<div class="pk-grow-grid">{cells}</div>')
+                md(f"**{kind}**　**{rnd}巡目**{mark}　参加 **{count}** 回　"
+                   + (f"🎉 完成！ 次の参加から{rnd + 1}巡目{round_mark(rnd + 1)}、新しい生き物が生まれます" if done else "次の参加で成長！"))
+                st.caption("練習会に参加するたびに1段階ずつ成長して、10回で完成します。"
+                           "11回目からは2巡目で、別の生き物をたまごから育てます。2巡目は⭐、3巡目は🌟、4巡目は👑、5巡目からは💎のマークつき。"
+                           "どの生き物になるかは人によってちがいます。")
             # 登録メンバーの人数（家族として追加した人も含む）
             md(f'<div class="pk-count-chip">👥 YAME PICK登録メンバー <b>{len(data["members"])}</b>人</div>')
 
