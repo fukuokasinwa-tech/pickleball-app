@@ -1147,11 +1147,8 @@ def pill(data: dict, m: dict, ev: dict, me: dict | None) -> str:
         src = m["source"] + (f"（{m['referrer']}）" if m["referrer"] else "")
         src_html = f'<span class="src">{esc(src)}</span>' if src else ""
         return f'<span class="pk-pill first">{esc(m["name"])}<span class="hatsu">初</span>{src_html}</span>'
-    count = play_count(data, m["id"])
-    _, note, _, _ = creature_of(m["id"], count)
     mine = me and (m["id"] == me["id"] or m["family_of"] == me["id"])
-    return (f'<span class="pk-pill{" me" if mine else ""}" title="{esc(note)}">{esc(m["name"])} '
-            f'{creature_html(m["id"], count)}</span>')
+    return f'<span class="pk-pill{" me" if mine else ""}">{esc(m["name"])}</span>'
 
 
 def render_event(data: dict, ev: dict, me: dict | None, past: bool = False) -> None:
