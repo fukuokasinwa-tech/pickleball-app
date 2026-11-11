@@ -37,17 +37,18 @@ SOURCES = ["友人・知人の紹介", "家族", "Instagram/SNS", "Web検索", "
 # (必要な参加回数, レベル名, アイコン)
 LEVELS = [(0, "ビギナー", "🌱"), (1, "ルーキー", "🥚"), (6, "プレイヤー", "🏓"), (15, "エース", "🔥"), (30, "レジェンド", "👑")]
 # 名前の横の生き物：参加するたびに成長する。どの生き物になるかは人ごとに決まる（登録IDから）
-CREATURES = [  # どれも小さい生き物から大きな生き物へ
-    ("とり", ["🥚", "🐣", "🐥", "🐦", "🕊️", "🦜", "🦆", "🦉", "🦅", "🦢"]),
-    ("うみの生き物", ["🥚", "🦐", "🐟", "🐠", "🐡", "🦑", "🐙", "🐬", "🦈", "🐳"]),
-    ("きょうりゅう", ["🥚", "🐸", "🦎", "🐢", "🐍", "🐊", "🦖", "🦕", "🐲", "🐉"]),
-    ("どうぶつ", ["🥚", "🐁", "🐇", "🐈", "🦝", "🦊", "🐺", "🐆", "🦁", "🐯"]),
-    ("のはらの生き物", ["🥚", "🐜", "🐞", "🐝", "🦋", "🐸", "🐿️", "🐇", "🦊", "🦌"]),
-    ("こおりの生き物", ["🥚", "🐣", "🐧", "🦊", "🦦", "🦭", "🦌", "🐻‍❄️", "🦣", "🐋"]),
-    ("もりの生き物", ["🥚", "🦇", "🐿️", "🦔", "🦡", "🦫", "🐗", "🦌", "🐻", "🦬"]),
-    ("サバンナの生き物", ["🥚", "🦎", "🐒", "🦩", "🦍", "🦓", "🦒", "🦛", "🦏", "🐘"]),
+CREATURES = [  # 1種類の生き物が、こども → おとな へ育つ。同じ絵の段階は少しずつ大きくなる
+    ("にわとり", ["🥚", "🐣", "🐥", "🐥", "🐤", "🐤", "🐔", "🐔", "🐓", "🐓"]),
+    ("ちょうちょ", ["🥚", "🐛", "🐛", "🐛", "🐛", "🐛", "🦋", "🦋", "🦋", "🦋"]),
+    ("ペンギン", ["🥚", "🐧", "🐧", "🐧", "🐧", "🐧", "🐧", "🐧", "🐧", "🐧"]),
+    ("カメ", ["🥚", "🐢", "🐢", "🐢", "🐢", "🐢", "🐢", "🐢", "🐢", "🐢"]),
+    ("ティラノサウルス", ["🥚", "🦖", "🦖", "🦖", "🦖", "🦖", "🦖", "🦖", "🦖", "🦖"]),
+    ("ドラゴン", ["🥚", "🐲", "🐲", "🐲", "🐲", "🐉", "🐉", "🐉", "🐉", "🐉"]),
+    ("クジラ", ["🐳", "🐳", "🐳", "🐳", "🐳", "🐳", "🐳", "🐳", "🐋", "🐋"]),
+    ("ライオン", ["🦁", "🦁", "🦁", "🦁", "🦁", "🦁", "🦁", "🦁", "🦁", "🦁"]),
 ]
-# 参加するたびに1段階ずつ大きな生き物になり、10回で完成。11回目からは2巡目で、同じ流れをマークつきでもう一度
+GROW_SCALE = [0.75, 0.8, 0.88, 0.96, 1.04, 1.12, 1.22, 1.32, 1.44, 1.58]  # 段階ごとの絵の大きさ（倍）
+# 参加するたびに1段階ずつ大きくなり、10回で完成。11回目からは2巡目で、同じ生き物をマークつきでもう一度
 ROUND_MARKS = ["", "⭐", "🌟", "👑", "💎"]
 # 練習会の時間の選択肢（30分おき・6:00〜22:00）
 TIME_SLOTS = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in (0, 30) if (h, m) <= (22, 0)]
@@ -371,15 +372,23 @@ def round_mark(rnd: int) -> str:
     return ROUND_MARKS[min(rnd, len(ROUND_MARKS)) - 1]
 
 
-def creature_of(member_id: str, count: int) -> tuple[str, str, bool]:
-    """（名前の横に出す姿, 説明, 完成したか）を返す。"""
+def creature_of(member_id: str, count: int) -> tuple[str, str, bool, float]:
+    """（名前の横に出す姿, 説明, 完成したか, 絵の大きさ）を返す。"""
     rnd, step = creature_step(count)
     kind, stages = creature_kind(member_id, rnd)
     done = step == len(stages) - 1
     mark = round_mark(rnd)
     note = (f"{kind}・{rnd}巡目{mark}（{step + 1}/{len(stages)}）参加{count}回"
             + (f"・完成！次は{rnd + 1}巡目{round_mark(rnd + 1)}" if done else f"・次の参加で成長"))
-    return stages[step] + mark, note, done
+    return stages[step] + mark, note, done, GROW_SCALE[step]
+
+
+def creature_html(member_id: str, count: int) -> str:
+    """名前の横に出す生き物（育つほど大きく表示）。"""
+    rnd, step = creature_step(count)
+    _, stages = creature_kind(member_id, rnd)
+    return (f'<span class="pk-cr" style="font-size:{GROW_SCALE[step]:.2f}em">{stages[step]}</span>'
+            f'{round_mark(rnd)}')
 
 
 def family_of(data: dict, member_id: str) -> list[dict]:
@@ -734,7 +743,8 @@ a.pk-insta .ig { font-size: 1.1rem; }
 .pk-grow-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 4px 0 10px; }
 .pk-grow { display: flex; flex-direction: column; align-items: center; background: #F3F3EF; border-radius: 12px;
            padding: 4px 0 2px; opacity: .45; }
-.pk-grow span { font-size: 26px; line-height: 1.2; filter: grayscale(1); }
+.pk-grow span { line-height: 34px; height: 34px; filter: grayscale(1); }
+.pk-cr { display: inline-block; line-height: 1; vertical-align: middle; }
 .pk-grow small { font-size: 11px; color: #666; }
 .pk-grow.on { opacity: 1; background: #FFF1DE; }
 .pk-grow.on span { filter: none; }
@@ -876,20 +886,21 @@ def render_hero(data: dict, me: dict | None) -> None:
                         st.session_state["flash"] = f"{name.strip()} さんを追加しました！"
                         st.rerun()
             count = play_count(data, me["id"])
-            icon, _, done = creature_of(me["id"], count)
+            icon, _, done, _ = creature_of(me["id"], count)
             with st.popover(f"{icon} 成長"):
                 rnd, step = creature_step(count)
                 kind, stages = creature_kind(me["id"], rnd)
                 mark = round_mark(rnd)
                 # まだ育っていない先の姿は ❔ で隠す（育った分には巡目のマークがつく）
                 cells = "".join(
-                    f'<div class="pk-grow{" on" if i <= step else ""}"><span>{e if i <= step else "❔"}</span>'
+                    f'<div class="pk-grow{" on" if i <= step else ""}">'
+                    f'<span style="font-size:{round(20 * GROW_SCALE[i])}px">{e if i <= step else "❔"}</span>'
                     f'<small>{i + 1}{mark if i <= step else ""}</small></div>' for i, e in enumerate(stages))
                 md(f'<div class="pk-grow-grid">{cells}</div>')
                 md(f"**{kind}**　**{rnd}巡目**{mark}　参加 **{count}** 回　"
                    + (f"🎉 完成！ 次の参加から{rnd + 1}巡目{round_mark(rnd + 1)}" if done else "次の参加で成長！"))
-                st.caption("練習会に参加するたびに、小さい生き物から大きな生き物へ1段階ずつ成長して、10回で完成します。"
-                           "11回目からは2巡目で、同じ流れをもう一度。2巡目は⭐、3巡目は🌟、4巡目は👑、5巡目からは💎のマークがつきます。"
+                st.caption("練習会に参加するたびに、生き物が1段階ずつ大きく育って、10回で完成します。"
+                           "11回目からは2巡目で、同じ生き物をもう一度。2巡目は⭐、3巡目は🌟、4巡目は👑、5巡目からは💎のマークがつきます。"
                            "どの生き物になるかは人によってちがいます。")
             # 登録メンバーの人数（家族として追加した人も含む）
             md(f'<div class="pk-count-chip">👥 YAME PICK登録メンバー <b>{len(data["members"])}</b>人</div>')
@@ -1144,9 +1155,11 @@ def pill(data: dict, m: dict, ev: dict, me: dict | None) -> str:
         src = m["source"] + (f"（{m['referrer']}）" if m["referrer"] else "")
         src_html = f'<span class="src">{esc(src)}</span>' if src else ""
         return f'<span class="pk-pill first">{esc(m["name"])}<span class="hatsu">初</span>{src_html}</span>'
-    icon, note, _ = creature_of(m["id"], play_count(data, m["id"]))
+    count = play_count(data, m["id"])
+    _, note, _, _ = creature_of(m["id"], count)
     mine = me and (m["id"] == me["id"] or m["family_of"] == me["id"])
-    return f'<span class="pk-pill{" me" if mine else ""}" title="{esc(note)}">{esc(m["name"])} {icon}</span>'
+    return (f'<span class="pk-pill{" me" if mine else ""}" title="{esc(note)}">{esc(m["name"])} '
+            f'{creature_html(m["id"], count)}</span>')
 
 
 def render_event(data: dict, ev: dict, me: dict | None, past: bool = False) -> None:
