@@ -1810,6 +1810,26 @@ def save_match(event_id: str, cfg: dict) -> None:
         _append("settings", {"id": key, "value": value})
 
 
+FREE_KEY = "free_names"
+FREE_DEFAULT = "のり"
+
+
+def free_names_text(data: dict) -> str:
+    """参加費がかからない人（主催者など）の名前。settings シートに「、」区切りで保存。"""
+    row = find(data["settings"], FREE_KEY)
+    return row["value"] if row else FREE_DEFAULT
+
+
+def free_names(data: dict) -> set[str]:
+    return {norm(n) for n in re.split(r"[、,，\s]+", free_names_text(data)) if n.strip()}
+
+
+def fee_of(p: dict, fee_normal: int, fee_first: int) -> int:
+    if p.get("free"):
+        return 0
+    return int(fee_first) if p["first"] else int(fee_normal)
+
+
 def match_people(data: dict, ev: dict, cfg: dict) -> list[dict]:
     """対戦表に入れる人：「参加する」を押した人（家族を含む）＋ 当日参加の人。"""
     members = {m["id"]: m for m in data["members"]}
@@ -1822,6 +1842,9 @@ def match_people(data: dict, ev: dict, cfg: dict) -> list[dict]:
         name = w["name"] if w["name"] not in names else f"{w['name']}（当日）"
         people.append({"id": f"w:{w['name']}", "name": name, "first": w.get("first", False), "walkin": True})
         names.add(name)
+    free = free_names(data)
+    for p in people:
+        p["free"] = norm(p["name"].removesuffix("（当日）")) in free
     return people
 
 
@@ -1905,13 +1928,17 @@ def admin_matches(data: dict) -> None:
     c1, c2 = st.columns(2)
     fee_normal = c1.number_input("通常（円）", min_value=0, step=100, value=int(cfg["fee_normal"]), key=f"mt_fee_n_{eid}")
     fee_first = c2.number_input("初参加 🔰（円）", min_value=0, step=100, value=int(cfg["fee_first"]), key=f"mt_fee_f_{eid}")
-    total = sum(fee_first if p["first"] else fee_normal for p in included)
-    paid = [p for p in included if p["name"] in cfg["paid"]]
-    collected = sum(fee_first if p["first"] else fee_normal for p in paid)
-    with st.expander(f"💰 合計 {total:,}円（{len(included)}人）　集金済み {collected:,}円（{len(paid)}人）"):
+    total = sum(fee_of(p, fee_normal, fee_first) for p in included)
+    paying = [p for p in included if not p["free"]]
+    paid = [p for p in paying if p["name"] in cfg["paid"]]
+    collected = sum(fee_of(p, fee_normal, fee_first) for p in paid)
+    with st.expander(f"💰 合計 {total:,}円（{len(paying)}人）　集金済み {collected:,}円（{len(paid)}人）"):
         for p in included:
             c1, c2 = st.columns([3, 2], vertical_alignment="center")
-            fee = fee_first if p["first"] else fee_normal
+            if p["free"]:
+                c1.write(f"{p['name']}　0円（主催者）")
+                continue
+            fee = fee_of(p, fee_normal, fee_first)
             c1.write(f"{p['name']}{' 🔰' if p['first'] else ''}　{fee:,}円")
             done = c2.checkbox("集金済み", value=p["name"] in cfg["paid"], key=f"mt_paid_{eid}_{p['id']}")
             if done != (p["name"] in cfg["paid"]):
@@ -1990,7 +2017,7 @@ def auto_sales(data: dict, ev: dict) -> int:
     """その日の売上金の自動計算：🎾 対戦表の参加者（来なかった人を除く・当日参加を含む）× 参加費。"""
     cfg = load_match(data, ev["id"])
     people = [p for p in match_people(data, ev, cfg) if p["id"] not in cfg["excluded"]]
-    return sum(int(cfg["fee_first"]) if p["first"] else int(cfg["fee_normal"]) for p in people)
+    return sum(fee_of(p, cfg["fee_normal"], cfg["fee_first"]) for p in people)
 
 
 KANSUJI = {"〇": 0, "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
@@ -2134,7 +2161,7 @@ def apply_sales_voice(data: dict, cfg: dict, events: list[dict], autos: dict) ->
 
 def admin_sales(data: dict) -> None:
     st.caption("練習会ごとの売上金をまとめて、授産売上金提出表（Excel・A4縦）を作ります。"
-               "売上金は「🎾 対戦表」の参加者と参加費から自動で入ります。表の「売上金」を押すと直接書き換えられます。")
+               "売上金は「🎾 対戦表」の参加者と参加費から自動で入ります（主催者は0円）。表の「売上金」を押すと直接書き換えられます。")
     cfg = load_sales(data)
     t = date.fromisoformat(today())
     c1, c2 = st.columns(2)
@@ -2150,6 +2177,16 @@ def admin_sales(data: dict) -> None:
     if not events:
         st.info("この期間に練習会はありません。")
         return
+    with st.expander("⚙ 参加費がかからない人（主催者など）"):
+        free_text = st.text_input("お名前（複数のときは「、」で区切る）", value=free_names_text(data), key="sl_free",
+                                  help="ここに入れた人は、売上金と対戦表の参加費の計算で0円になります。")
+        if free_text.strip() != free_names_text(data):
+            save_setting(data, FREE_KEY, free_text.strip())
+            for k in [k for k in st.session_state if str(k).startswith("sl_table_")]:
+                del st.session_state[k]
+            st.session_state["flash"] = "参加費がかからない人を保存しました。"
+            st.rerun()
+        st.caption("今の設定：" + (free_text.strip() or "（なし）") + "　→ 参加費 0円として計算します。")
     autos = {e["id"]: auto_sales(data, e) for e in events}
     with st.container(border=True):
         md("**🎤 声で入力**　例：「11月7日 6500円」「14日 4000円 備考 現金」")
