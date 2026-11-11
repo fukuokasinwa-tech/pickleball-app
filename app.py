@@ -842,8 +842,12 @@ def render_login() -> None:
         pin = st.text_input("好きな数字（4〜8桁）", max_chars=8, type="password", placeholder="例: 0123",
                             help="同じ名前の人と見分けるための数字です。忘れたときは管理者がリセットできます。")
         with st.expander("はじめての方はこちらも教えてください"):
-            source = st.selectbox("YAME PICKを知ったきっかけ", ["（選択しない）"] + SOURCES)
+            source = st.selectbox("YAME PICKを知ったきっかけ", ["（選択しない）"] + SOURCES, index=0, key="login_source")
             referrer = st.text_input("紹介してくれた人", max_chars=20) if source == "友人・知人の紹介" else ""
+            # 「その他」は空欄から自分で書いてもらう
+            other = (st.text_input("きっかけを教えてください", value="", max_chars=40, key="login_source_other",
+                                   placeholder="例：体育館で見かけた")
+                     if source == "その他" else "")
         if st.button("はじめる 🏓", type="primary", width="stretch"):
             pin = pin.strip()
             if not name.strip():
@@ -852,6 +856,8 @@ def render_login() -> None:
                 st.warning("好きな数字を4〜8桁で入力してください。")
             else:
                 src = "" if source.startswith("（") else source
+                if source == "その他" and other.strip():
+                    src = f"その他：{other.strip()}"
                 res, m = login_or_register(name, pin, src, referrer)
                 if res in ("ok", "new"):
                     st.session_state.pop("need_pin", None)
