@@ -38,12 +38,16 @@ SOURCES = ["友人・知人の紹介", "家族", "Instagram/SNS", "Web検索", "
 LEVELS = [(0, "ビギナー", "🌱"), (1, "ルーキー", "🥚"), (6, "プレイヤー", "🏓"), (15, "エース", "🔥"), (30, "レジェンド", "👑")]
 # 名前の横の生き物：参加するたびに成長する。どの生き物になるかは人ごとに決まる（登録IDから）
 CREATURES = [
-    ("とり", ["🥚", "🐣", "🐥", "🐤", "🐓", "🦅"]),
-    ("うみの生き物", ["🥚", "🐟", "🐠", "🐬", "🦈", "🐳"]),
-    ("きょうりゅう", ["🥚", "🦎", "🐊", "🦕", "🦖", "🐉"]),
-    ("どうぶつ", ["🥚", "🐁", "🐇", "🦊", "🐺", "🦁"]),
+    ("とり", ["🥚", "🐣", "🐥", "🐤", "🐦", "🐓", "🦉", "🦅"]),
+    ("うみの生き物", ["🥚", "🦐", "🐟", "🐠", "🐡", "🐬", "🦈", "🐳"]),
+    ("きょうりゅう", ["🥚", "🦎", "🐊", "🐢", "🦕", "🦖", "🐲", "🐉"]),
+    ("どうぶつ", ["🥚", "🐁", "🐇", "🦝", "🦊", "🐺", "🐯", "🦁"]),
+    ("むし", ["🥚", "🐛", "🐜", "🐝", "🐞", "🦗", "🪲", "🦋"]),
+    ("こおりの生き物", ["🥚", "🐣", "🐧", "🦦", "🦭", "🐻‍❄️", "🦣", "🐋"]),
+    ("もりの生き物", ["🥚", "🐿️", "🦔", "🦡", "🦌", "🐗", "🦬", "🐻"]),
+    ("サバンナの生き物", ["🥚", "🦎", "🦩", "🦓", "🦒", "🦏", "🦛", "🐘"]),
 ]
-GROW_AT = [1, 2, 4, 7, 12, 20]  # この回数参加すると次の姿になる
+GROW_AT = [1, 2, 3, 5, 8, 12, 18, 25]  # この回数参加すると次の姿になる
 # 練習会の時間の選択肢（30分おき・6:00〜22:00）
 TIME_SLOTS = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in (0, 30) if (h, m) <= (22, 0)]
 NEWS_CATEGORIES = {"お知らせ": ("📣", "info"), "大会情報": ("🏆", "event"), "その他": ("📝", "other")}
@@ -715,10 +719,10 @@ a.pk-insta .ig { font-size: 1.1rem; }
   .ev-top { grid-template-columns: 84px 1fr; }
   .ev-date .d { font-size: 2.6rem; }
 }
-.pk-grow-row { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin: 4px 0 8px; }
-.pk-grow { font-size: 30px; opacity: .35; filter: grayscale(1); }
+.pk-grow-row { display: flex; align-items: center; flex-wrap: wrap; gap: 1px; margin: 4px 0 8px; }
+.pk-grow { font-size: 23px; opacity: .35; filter: grayscale(1); }
 .pk-grow.on { opacity: 1; filter: none; }
-.pk-grow-arrow { color: #999; font-size: 20px; margin: 0 1px; }
+.pk-grow-arrow { color: #999; font-size: 14px; margin: 0; }
 </style>
 """
 
