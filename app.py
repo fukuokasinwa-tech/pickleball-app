@@ -805,6 +805,9 @@ def sign_in(m: dict) -> None:
 
 def sign_out() -> None:
     st.session_state.pop("me", None)
+    # 次にログインする人に管理者の状態を引き継がない
+    st.session_state.pop("is_admin", None)
+    st.session_state.pop("auto_admin_done", None)
     st.query_params.pop("me", None)
     st.session_state["_clear_login"] = True
 
@@ -1373,8 +1376,15 @@ def render_admin(data: dict, me: dict | None) -> None:
     if not can_see_admin(data, me):
         return
     md('<div class="pk-h">ADMIN</div>')
+    # 👑 管理者にした人がログインしているときは、パスワードなしで管理者メニューを開いた状態にする
+    # （「管理者ログアウト」を押したあとは、その画面を開いている間は自動では入らない）
+    is_admin_member = bool(me and me["id"] in admin_member_ids(data))
+    if is_admin_member and not st.session_state.get("auto_admin_done"):
+        st.session_state["auto_admin_done"] = True
+        st.session_state["is_admin"] = True
+        st.session_state["admin_menu"] = True  # 管理者メニューを開く
     # key を付けて、上の欄が増えたり減ったりしても開いた状態を保つ
-    with st.expander("🔧 管理者メニュー", key="admin_menu"):
+    with st.expander("🔧 管理者メニュー", key="admin_menu", on_change="rerun"):
         if not admin_member_ids(data):
             st.info("管理者がまだ決まっていないため、全員に表示されています。"
                     "ログイン後「👥 メンバー」で「👑 管理者にする」を押すと、管理者の人にだけ表示されるようになります。")
