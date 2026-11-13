@@ -78,6 +78,7 @@ ACCESS_DEFAULT = {
 }
 CACHE_TTL = 15  # 秒。他の人の出欠が画面に反映されるまでの最大遅延
 INSTAGRAM_URL = "https://www.instagram.com/yamepick/"
+LINE_OPENCHAT_URL = "https://line.me/ti/g2/lI5qNXBDUgrYGVbNnEHCYTvY1x9LxBRGIxSt4Q?utm_source=invitation&utm_medium=link_copy&utm_campaign=default"
 
 
 def now() -> datetime:
@@ -655,6 +656,19 @@ a.pk-map-btn {
 [class*="st-key-gal_"] iframe { border-radius: 12px; }
 .pk-gal-cap { font-weight: 800; line-height: 1.6; padding: 0 4px; }
 
+/* ---- LINE オープンチャット ---- */
+.pk-line-box { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #06C755;
+               padding: 14px 16px 16px; margin: 6px 0 18px; text-align: center; }
+.pk-line-title { font-weight: 900; font-size: 1.02rem; line-height: 1.45; }
+.pk-line-sub { font-size: .85rem; color: #555; margin: 4px 0 12px; line-height: 1.5; }
+a.pk-line {
+  display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 16px; border-radius: 999px;
+  background: #06C755; color: #fff !important; font-weight: 900; font-size: 1.02rem; text-decoration: none !important;
+  border: 2.5px solid var(--ink); box-shadow: 3px 4px 0 var(--ink);
+}
+a.pk-line:hover { filter: brightness(1.05); }
+a.pk-line .ln { background: #fff; color: #06C755; border-radius: 8px; padding: 1px 7px; font-size: .78rem; letter-spacing: .02em; }
+
 /* ---- Instagram へのリンク ---- */
 .pk-insta-row { text-align: center; margin: 14px 0 6px; }
 a.pk-insta {
@@ -917,6 +931,20 @@ def theme_html(title: str, body: str) -> str:
 def instagram_link(text: str) -> str:
     return (f'<a class="pk-insta" href="{INSTAGRAM_URL}" target="_blank" rel="noopener">'
             f'<span class="ig">📷</span>{esc(text)}</a>')
+
+
+def line_link(text: str) -> str:
+    return (f'<a class="pk-line" href="{LINE_OPENCHAT_URL}" target="_blank" rel="noopener">'
+            f'<span class="ln">LINE</span>{esc(text)}</a>')
+
+
+def render_line() -> None:
+    """LINE オープンチャットへの入口（トップのすぐ下に、だれにでも表示）。"""
+    md(f'''<div class="pk-line-box">
+  <div class="pk-line-title">💬 オープンチャット「YAME PICK（ピックルボール）」</div>
+  <div class="pk-line-sub">練習会のお知らせや情報交換はこちら。LINEの友だち追加なしで、ニックネームで参加できます。</div>
+  {line_link("オープンチャットに参加する")}
+</div>''')
 
 
 def render_theme(data: dict) -> None:
@@ -2481,6 +2509,7 @@ def render_page(data: dict) -> None:
         st.toast(msg, icon="⚠️")
     if not me:
         render_login()
+    render_line()
     render_howto(data)
     render_theme(data)
     render_news(data)
