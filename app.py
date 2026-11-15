@@ -18,8 +18,11 @@ import io
 import json
 import os
 import re
+import smtplib
+import threading
 import time
 import uuid
+from email.message import EmailMessage
 from urllib.parse import quote
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -381,7 +384,36 @@ def login_or_register(name: str, pin: str, source: str, referrer: str) -> tuple[
          "source": source, "referrer": referrer.strip() if source == "友人・知人の紹介" else "",
          "created_at": now().isoformat(timespec="seconds")}
     _append("members", m)
+    notify_new_member(m, "本人がアプリで登録")
     return "new", m
+
+
+def _send_mail(subject: str, body: str) -> None:
+    """Gmail から通知メールを送る（secrets に mail_from / mail_app_password / mail_to があるときだけ）。"""
+    sender, password = secret("mail_from"), secret("mail_app_password").replace(" ", "")
+    to = [a.strip() for a in secret("mail_to").split(",") if a.strip()]
+    if not (sender and password and to):
+        return
+    msg = EmailMessage()
+    msg["Subject"], msg["From"], msg["To"] = subject, sender, ", ".join(to)
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as s:
+            s.login(sender, password)
+            s.send_message(msg)
+    except Exception as e:  # メールが送れなくても、登録そのものは止めない
+        print("通知メールを送れませんでした:", e)
+
+
+def notify_new_member(m: dict, how: str) -> None:
+    """新しいメンバーが入ったことを、決めた人にメールで知らせる（画面を待たせないよう裏で送る）。"""
+    src = m.get("source", "") + (f"（紹介：{m['referrer']}）" if m.get("referrer") else "")
+    body = (f"YAME PICK 参加確認アプリに新しいメンバーが登録されました。\n\n"
+            f"お名前：{m['name']}\n登録のしかた：{how}\n"
+            f"知ったきっかけ：{src or '（未回答）'}\n登録日時：{now():%Y/%m/%d %H:%M}\n\n"
+            f"アプリ：{secret('app_url', 'https://pickleball-app-4vdhbkkfrztdscguvjgqja.streamlit.app')}\n")
+    threading.Thread(target=_send_mail, args=(f"【YAME PICK】新しいメンバー：{m['name']} さん", body),
+                     daemon=True).start()
 
 
 def add_member(name: str, family_of: str = "", source: str = "", referrer: str = "") -> str | None:
@@ -389,8 +421,10 @@ def add_member(name: str, family_of: str = "", source: str = "", referrer: str =
     if any(norm(m["name"]) == norm(name) for m in _fresh_data()["members"]):
         return None
     mid = new_id()
-    _append("members", {"id": mid, "name": name.strip(), "pin_hash": "", "family_of": family_of,
-                        "source": source, "referrer": referrer, "created_at": now().isoformat(timespec="seconds")})
+    m = {"id": mid, "name": name.strip(), "pin_hash": "", "family_of": family_of,
+         "source": source, "referrer": referrer, "created_at": now().isoformat(timespec="seconds")}
+    _append("members", m)
+    notify_new_member(m, f"{referrer} さんの家族として追加" if family_of else "管理者が代理で登録")
     return mid
 
 
