@@ -428,17 +428,37 @@ def add_member(name: str, family_of: str = "", source: str = "", referrer: str =
     return mid
 
 
-def set_status(event_id: str, member_id: str, status: str | None) -> str:
-    """出欠を登録。status=None で未回答に戻す。'ok' / 'full' を返す。"""
+def notify_attendance(data: dict, ev: dict, member_id: str, joined: bool, count: int, by: str) -> None:
+    """参加者が増えた・減ったことを、決めた人にメールで知らせる。"""
+    m = find(data["members"], member_id)
+    if m is None:
+        return
+    d = date.fromisoformat(ev["date"])
+    when = f"{d.month}/{d.day}（{WEEKDAYS[d.weekday()][0]}）{ev.get('time', '')}".strip()
+    cap = f" / 定員{ev['capacity']}人" if ev.get("capacity") else ""
+    word = "参加" if joined else "参加取り消し"
+    body = (f"YAME PICK の練習会の参加者が{'増え' if joined else '減り'}ました。\n\n"
+            f"練習会：{when} {ev['title']}\nお名前：{m['name']}\n変更：{word}（{by}）\n"
+            f"参加予定：{count}人{cap}\n変更日時：{now():%Y/%m/%d %H:%M}\n\n"
+            f"アプリ：{secret('app_url', 'https://pickleball-app-4vdhbkkfrztdscguvjgqja.streamlit.app')}\n")
+    subject = f"【YAME PICK】{'➕' if joined else '➖'}{word}：{m['name']} さん（{d.month}/{d.day} 参加{count}人）"
+    threading.Thread(target=_send_mail, args=(subject, body), daemon=True).start()
+
+
+def set_status(event_id: str, member_id: str, status: str | None, by: str = "本人") -> str:
+    """出欠を登録。status=None で未回答に戻す。'ok' / 'full' を返す。参加者が増減したらメールで知らせる。"""
     data = _fresh_data()
     ev = find(data["events"], event_id)
     if ev is None:
         return "notfound"
+    others = [a for a in event_rows(data, event_id, "attending") if a["member_id"] != member_id]
     if status == "attending" and ev["capacity"]:
-        others = [a for a in event_rows(data, event_id, "attending") if a["member_id"] != member_id]
         if len(others) >= ev["capacity"]:
             return "full"
     row = next((a for a in data["attendance"] if a["event_id"] == event_id and a["member_id"] == member_id), None)
+    was, will = bool(row and row["status"] == "attending"), status == "attending"
+    if was != will:
+        notify_attendance(data, ev, member_id, will, len(others) + will, by)
     stamp = now().isoformat(timespec="seconds")
     if status is None:
         if row:
@@ -2425,10 +2445,11 @@ def admin_attendance(data: dict) -> None:
         c1.write(f"{'🟠' if a['status'] == 'attending' else '⚪'} {m['name']}")
         other = "absent" if a["status"] == "attending" else "attending"
         if c2.button("不参加にする" if other == "absent" else "参加にする", key=f"adm_flip_{a['id']}"):
-            _update("attendance", a["id"], {"status": other, "updated_at": now().isoformat(timespec="seconds")})
+            if set_status(sel, m["id"], other, by="管理者が変更") == "full":
+                st.session_state["flash_warn"] = "定員に達しているため、参加にできませんでした。"
             st.rerun()
         if c3.button("🗑", key=f"adm_attdel_{a['id']}"):
-            _delete("attendance", {a["id"]})
+            set_status(sel, m["id"], None, by="管理者が削除")
             st.rerun()
     st.divider()
     st.write("**代理で参加登録**（電話やLINEで連絡をくれた方など）")
@@ -2436,7 +2457,7 @@ def admin_attendance(data: dict) -> None:
     if st.button("参加で登録", key="adm_proxy_add") and name.strip():
         m = next((m for m in data["members"] if norm(m["name"]) == norm(name)), None)
         mid = m["id"] if m else add_member(name)
-        set_status(sel, mid, "attending")
+        set_status(sel, mid, "attending", by="管理者が代理で登録")
         st.rerun()
 
 
