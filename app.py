@@ -39,7 +39,6 @@ WEEKDAYS = ["月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "�
 SOURCES = ["友人・知人の紹介", "家族", "Instagram/SNS", "Web検索", "チラシ・ポスター", "体験会", "その他"]
 # (必要な参加回数, レベル名, アイコン)
 LEVELS = [(0, "ビギナー", "🌱"), (1, "ルーキー", "🥚"), (6, "プレイヤー", "🏓"), (15, "エース", "🔥"), (30, "レジェンド", "👑")]
-# 名前の横の生き物：参加するたびに成長する。どの生き物になるかは人ごとに決まる（登録IDから）
 # 練習会の時間の選択肢（30分おき・6:00〜22:00）
 TIME_SLOTS = [f"{h:02d}:{m:02d}" for h in range(6, 23) for m in (0, 30) if (h, m) <= (22, 0)]
 NEWS_CATEGORIES = {"お知らせ": ("📣", "info"), "大会情報": ("🏆", "event"), "その他": ("📝", "other")}
@@ -52,6 +51,9 @@ SHEETS = {
     # 写真・動画（Instagram などのリンク）。start/end は掲載期間（空欄なら制限なし）
     "gallery": ["id", "date", "url", "caption", "start", "end"],
     "settings": ["id", "value"],  # id = 設定名（howto_title など）
+    # アプリの「お問い合わせ」から届いた声。done = 対応済みなら "1"
+    # reply = 主催者からの返信、seen = 本人が返信を見たら "1"
+    "inquiries": ["id", "created_at", "member_id", "name", "body", "done", "reply", "replied_at", "seen"],
     # アップロードした写真。1枚＝1行で、JPEG を base64 にして d1〜d20 のマスに分けて入れる
     # （1マス5万字までのため）。重いので、ふだんの一括読み込みには含めない
     "photos": ["id"] + [f"d{i}" for i in range(1, 21)],
@@ -533,7 +535,10 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 }
 
 /* ---- 白カード（レベル・使い方・ログイン） ---- */
-.pk-card, .st-key-howto, .st-key-theme, .st-key-login {
+.pk-q { background: #F3F3EF; border-radius: 14px; padding: 8px 12px; margin: 8px 0 4px; font-weight: 700; }
+.pk-reply { background: #FFF1DE; border: 2px solid var(--brand); border-radius: 14px; padding: 8px 12px; margin: 4px 0 10px 18px; font-weight: 700; }
+.pk-reply.wait { background: #fafafa; border-color: #ddd; color: #888; }
+.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-contact, .st-key-replies {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
@@ -1138,6 +1143,87 @@ def render_access(data: dict) -> None:
            f'target="_blank" rel="noopener">🗺 Googleマップで開く</a></div>')
 
 
+CONTACT_MAX = 1000  # お問い合わせの最大文字数
+
+
+def my_inquiries(data: dict, me: dict) -> list[dict]:
+    return sorted((q for q in data["inquiries"] if q["member_id"] == me["id"]), key=lambda q: q["created_at"], reverse=True)
+
+
+def inquiry_html(q: dict) -> str:
+    try:
+        when = f"{datetime.fromisoformat(q['created_at']):%m/%d %H:%M}"
+    except ValueError:
+        when = ""
+    reply = (f"<div class='pk-reply'>💬 <b>主催者より</b> <span style='color:#888'>{esc(q.get('replied_at', ''))}</span><br>"
+             f"{esc(q['reply']).replace(chr(10), '<br>')}</div>" if q.get("reply")
+             else "<div class='pk-reply wait'>⏳ お返事をお待ちください</div>")
+    return (f"<div class='pk-q'><span style='color:#888'>{when} あなた</span><br>"
+            f"{esc(q['body']).replace(chr(10), '<br>')}</div>{reply}")
+
+
+def render_replies(data: dict, me: dict | None) -> None:
+    """主催者からの返信が届いていたら、アプリを開いたときにいちばん上に出す（本人は開くだけでOK）。"""
+    if not me:
+        return
+    new = [q for q in my_inquiries(data, me) if q.get("reply") and not q.get("seen")]
+    if not new:
+        return
+    with st.container(key="replies"):
+        md(f'<div class="pk-howto-title">📬 主催者から返信が届いています（{len(new)}件）</div>')
+        for q in new:
+            md(inquiry_html(q))
+        if st.button("読みました 👍", key="replies_seen", width="stretch"):
+            for q in new:
+                _update("inquiries", q["id"], {"seen": "1"})
+            st.rerun()
+
+
+def render_contact(data: dict, me: dict | None) -> None:
+    """主催者へのお問い合わせ欄。メールアドレスなどは使わず、書いて送るだけ。"""
+    md('<div class="pk-h">CONTACT</div>')
+    with st.container(key="contact"):
+        md('<div class="pk-howto-title">📮 主催者へのお問い合わせ</div>')
+        st.caption("質問・ご意見・「今日少し遅れます」など、なんでも気軽にどうぞ。"
+                   "メールアドレスなどは不要で、ここに書いて送るだけで主催者に直接届きます。"
+                   "ログインして送ると、主催者からの返事がこのアプリに届きます（次にアプリを開いたとき、いちばん上に表示されます）。")
+        if done := st.session_state.pop("contact_done", None):
+            st.success(done)
+        if me and (mine := my_inquiries(data, me)):
+            with st.expander(f"📬 これまでのお問い合わせと返信（{len(mine)}件）"):
+                for q in mine:
+                    md(inquiry_html(q))
+        with st.form("contact_form", clear_on_submit=True, border=False):
+            if me:
+                st.caption(f"お名前：**{me['name']}** さんとして送ります")
+                name = me["name"]
+            else:
+                name = st.text_input("お名前（ニックネームでもOK・空欄でもOK）", max_chars=20)
+            body = st.text_area("お問い合わせ内容", max_chars=CONTACT_MAX, height=120,
+                                placeholder="例：初めてでも参加できますか？／駐車場はありますか？")
+            sent = st.form_submit_button("📨 送る", type="primary", width="stretch")
+        if sent:
+            text = body.strip()
+            last = st.session_state.get("contact_last", 0.0)
+            if not text:
+                st.warning("お問い合わせ内容を入力してください。")
+            elif time.time() - last < 30:
+                st.warning("少し時間をおいてから、もう一度送ってください。")
+            else:
+                who = (name or "").strip() or "（名前なし）"
+                stamp = now()
+                _append("inquiries", {"id": new_id(), "created_at": stamp.isoformat(timespec="seconds"),
+                                      "member_id": me["id"] if me else "", "name": who, "body": text, "done": ""})
+                threading.Thread(target=_send_mail, daemon=True, args=(
+                    f"【YAME PICK】お問い合わせ：{who} さん",
+                    f"アプリのお問い合わせ欄から届きました。\n\nお名前：{who}"
+                    f"{'（アプリ登録メンバー）' if me else '（ログインしていない方）'}\n"
+                    f"日時：{stamp:%Y/%m/%d %H:%M}\n\n{text}\n")).start()
+                st.session_state["contact_last"] = time.time()
+                st.session_state["contact_done"] = "送りました！ありがとうございます 🙏"
+                st.rerun()
+
+
 def render_gallery(data: dict) -> None:
     items = [g for g in data["gallery"] if gallery_status(g) == "on"]
     if not items:
@@ -1413,8 +1499,8 @@ def render_admin(data: dict, me: dict | None) -> None:
                 st.error("パスワードが違います。")
             return
         admin_share()
-        t1, t12, t13, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
-            ["📅 練習会", "🎾 対戦表", "💴 売上表", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方",
+        t1, t14, t12, t13, t10, t11, t2, t8, t9, t6, t7, t3, t4, t5 = st.tabs(
+            ["📅 練習会", inquiry_tab_label(data), "🎾 対戦表", "💴 売上表", "🖼 投稿画像", "📄 チラシ", "📣 お知らせ", "📸 ギャラリー", "📍 場所", "📖 使い方",
              "🎯 テーマ", "✅ 出欠", "👥 メンバー", "📊 CSV"])
         with t1:
             admin_events(data)
@@ -1432,6 +1518,8 @@ def render_admin(data: dict, me: dict | None) -> None:
             admin_matches(data)
         with t13:
             admin_sales(data)
+        with t14:
+            admin_inquiries(data)
         with t6:
             admin_howto(data)
         with t7:
@@ -1445,6 +1533,52 @@ def render_admin(data: dict, me: dict | None) -> None:
         if st.button("管理者ログアウト", key="admin_logout"):
             st.session_state["is_admin"] = False
             st.rerun()
+
+
+def inquiry_tab_label(data: dict) -> str:
+    n = sum(not q["done"] for q in data["inquiries"])
+    return f"📮 問い合わせ（{n}）" if n else "📮 問い合わせ"
+
+
+def admin_inquiries(data: dict) -> None:
+    st.caption("アプリの「📮 主催者へのお問い合わせ」から届いた声です（新しい順）。メールの設定がしてあれば、届いたときにメールでも知らせます。")
+    items = sorted(data["inquiries"], key=lambda q: q["created_at"], reverse=True)
+    if not items:
+        st.info("まだお問い合わせはありません。")
+        return
+    for q in items:
+        with st.container(border=True):
+            try:
+                when = f"{datetime.fromisoformat(q['created_at']):%Y/%m/%d %H:%M}"
+            except ValueError:
+                when = q["created_at"]
+            md(f"{'✅' if q['done'] else '🆕'} **{esc(q['name'])}**　<span style='color:#888'>{when}</span>")
+            md(esc(q["body"]).replace("\n", "<br>"))
+            if q.get("reply"):
+                seen = "（本人が読みました）" if q.get("seen") else "（まだ読まれていません）"
+                md(f"<div class='pk-reply'>💬 <b>返信</b> <span style='color:#888'>{esc(q.get('replied_at', ''))} {seen}</span>"
+                   f"<br>{esc(q['reply']).replace(chr(10), '<br>')}</div>")
+            if q["member_id"]:
+                with st.form(f"inq_reply_{q['id']}", clear_on_submit=True, border=False):
+                    text = st.text_area("返信を書く" if not q.get("reply") else "返信を書き直す", height=80,
+                                        key=f"inq_reply_txt_{q['id']}", max_chars=CONTACT_MAX,
+                                        placeholder="ここに書いて「返信する」を押すと、本人がアプリを開いたときに表示されます")
+                    if st.form_submit_button("💬 返信する", type="primary"):
+                        if text.strip():
+                            _update("inquiries", q["id"], {"reply": text.strip(), "replied_at": f"{now():%Y/%m/%d %H:%M}",
+                                                           "seen": "", "done": "1"})
+                            st.session_state["flash"] = f"{q['name']} さんに返信しました。"
+                            st.rerun()
+                        st.warning("返信を入力してください。")
+            else:
+                st.caption("ログインしていない方からのお問い合わせのため、アプリでは返信できません（練習会や LINE でお返事ください）。")
+            c1, c2 = st.columns([3, 1])
+            if c1.button("未対応に戻す" if q["done"] else "✅ 対応済みにする", key=f"inq_done_{q['id']}", width="stretch"):
+                _update("inquiries", q["id"], {"done": "" if q["done"] else "1"})
+                st.rerun()
+            if c2.button("🗑", key=f"inq_del_{q['id']}", width="stretch"):
+                _delete("inquiries", {q["id"]})
+                st.rerun()
 
 
 def delete_event(event_id: str) -> None:
@@ -2576,6 +2710,7 @@ def render_page(data: dict) -> None:
         st.toast(msg, icon="⚠️")
     if not me:
         render_login()
+    render_replies(data, me)
     render_line()
     render_howto(data)
     render_theme(data)
@@ -2584,6 +2719,7 @@ def render_page(data: dict) -> None:
     render_events(data, me)
     render_access(data)
     render_gallery(data)
+    render_contact(data, me)
     render_admin(data, me)
 
 
