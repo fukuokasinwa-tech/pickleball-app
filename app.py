@@ -2406,10 +2406,20 @@ def admin_attendance(data: dict) -> None:
         st.rerun()
 
 
+def joined_label(created_at: str) -> str:
+    """登録した日時（例：2026/11/03（火）登録）。"""
+    try:
+        d = datetime.fromisoformat(created_at)
+    except ValueError:
+        return ""
+    return f"{d:%Y/%m/%d}（{WEEKDAYS[d.weekday()][0]}）登録"
+
+
 def admin_members(data: dict) -> None:
     st.caption("👑 管理者にした人がログインしているときだけ、画面下に管理者メニューが表示されます"
                "（管理者が1人もいないときは全員に表示）。")
     st.caption("好きな数字を忘れた方は「数字をリセット」してください。次にログインするときに新しい数字を設定できます。")
+    st.caption("📅 はアプリに登録した日です（登録が古い順に並んでいます）。")
     admins = admin_member_ids(data)
     members = sorted(data["members"], key=lambda m: m["created_at"])
     for m in members:
@@ -2418,6 +2428,8 @@ def admin_members(data: dict) -> None:
         pin_note = "" if m["family_of"] else ("　🔢数字あり" if m["pin_hash"] else "　（数字未設定）")
         crown = "👑 " if m["id"] in admins else ""
         c1.write(f"{crown}{m['name']}{fam}　参加{play_count(data, m['id'])}回{pin_note}")
+        if joined := joined_label(m.get("created_at", "")):
+            c1.caption(f"📅 {joined}")
         if not m["family_of"]:  # 家族は自分でログインしないので管理者にはできない
             if m["id"] in admins:
                 if c4.button("管理者を外す", key=f"adm_role_{m['id']}", width="stretch"):
