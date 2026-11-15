@@ -40,7 +40,7 @@ def page_html(cards, page, pages):
     li{{counter-increment:p;position:relative;padding-left:72px;font-size:42px;font-weight:900;line-height:1.4}}
     li::before{{content:counter(p);position:absolute;left:0;top:2px;width:54px;height:54px;border-radius:50%;background:#FE971A;
                border:5px solid #111;display:grid;place-items:center;font-size:30px;line-height:1}}
-    li em{{font-style:normal;background:linear-gradient(transparent 58%,#FFD27A 58%)}}
+    li em{{font-style:normal;white-space:nowrap;background:linear-gradient(transparent 58%,#FFD27A 58%)}}
     .foot{{color:#ccc;text-align:center;font-size:32px;position:absolute;left:0;right:0;bottom:90px}} .foot b{{color:#FE971A}}
     </style></head><body><div class=g></div>
     <div class=head><div><div class=k>YAME PICK</div><h1>練習<span>メニュー</span></h1><div class=sub>全{len(MENUS)}メニュー{pg_label}</div></div>
