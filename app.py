@@ -23,6 +23,7 @@ import threading
 import time
 import uuid
 from email.message import EmailMessage
+from email.utils import formataddr
 from urllib.parse import quote
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
@@ -397,8 +398,9 @@ def _send_mail(subject: str, body: str) -> None:
     if not (sender and password and to):
         return
     msg = EmailMessage()
-    msg["Subject"], msg["From"], msg["To"] = subject, sender, ", ".join(to)
-    msg.set_content(body)
+    # 受け取った人がひと目で分かるよう、送り主の名前と本文の先頭にも「やめピック」と入れる
+    msg["Subject"], msg["From"], msg["To"] = subject, formataddr(("やめピック（YAME PICK）", sender)), ", ".join(to)
+    msg.set_content("── やめピック（YAME PICK）参加確認アプリからのお知らせ ──\n\n" + body)
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20) as s:
             s.login(sender, password)
@@ -414,7 +416,7 @@ def notify_new_member(m: dict, how: str) -> None:
             f"お名前：{m['name']}\n登録のしかた：{how}\n"
             f"知ったきっかけ：{src or '（未回答）'}\n登録日時：{now():%Y/%m/%d %H:%M}\n\n"
             f"アプリ：{secret('app_url', 'https://pickleball-app-4vdhbkkfrztdscguvjgqja.streamlit.app')}\n")
-    threading.Thread(target=_send_mail, args=(f"【YAME PICK】新しいメンバー：{m['name']} さん", body),
+    threading.Thread(target=_send_mail, args=(f"【やめピック】新しいメンバー：{m['name']} さん", body),
                      daemon=True).start()
 
 
@@ -443,7 +445,7 @@ def notify_attendance(data: dict, ev: dict, member_id: str, joined: bool, count:
             f"練習会：{when} {ev['title']}\nお名前：{m['name']}\n変更：{word}（{by}）\n"
             f"参加予定：{count}人{cap}\n変更日時：{now():%Y/%m/%d %H:%M}\n\n"
             f"アプリ：{secret('app_url', 'https://pickleball-app-4vdhbkkfrztdscguvjgqja.streamlit.app')}\n")
-    subject = f"【YAME PICK】{'➕' if joined else '➖'}{word}：{m['name']} さん（{d.month}/{d.day} 参加{count}人）"
+    subject = f"【やめピック】{'➕' if joined else '➖'}{word}：{m['name']} さん（{d.month}/{d.day} 参加{count}人）"
     threading.Thread(target=_send_mail, args=(subject, body), daemon=True).start()
 
 
@@ -538,7 +540,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-q { background: #F3F3EF; border-radius: 14px; padding: 8px 12px; margin: 8px 0 4px; font-weight: 700; }
 .pk-reply { background: #FFF1DE; border: 2px solid var(--brand); border-radius: 14px; padding: 8px 12px; margin: 4px 0 10px 18px; font-weight: 700; }
 .pk-reply.wait { background: #fafafa; border-color: #ddd; color: #888; }
-.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-contact, .st-key-replies {
+.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-replies {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
@@ -714,6 +716,11 @@ a.pk-map-btn {
 }
 [class*="st-key-gal_"] iframe { border-radius: 12px; }
 .pk-gal-cap { font-weight: 800; line-height: 1.6; padding: 0 4px; }
+
+/* ---- お問い合わせ（たたんだ状態で小さく） ---- */
+.st-key-contact { margin: -6px 8px 22px 0; }
+.st-key-contact details { background: #fff; border: 3px solid var(--ink) !important; border-radius: 16px !important; }
+.st-key-contact summary { padding: 6px 14px !important; font-weight: 900; }
 
 /* ---- LINE オープンチャット ---- */
 .pk-line-box { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #06C755;
@@ -1180,48 +1187,50 @@ def render_replies(data: dict, me: dict | None) -> None:
 
 
 def render_contact(data: dict, me: dict | None) -> None:
-    """主催者へのお問い合わせ欄。メールアドレスなどは使わず、書いて送るだけ。"""
-    md('<div class="pk-h">CONTACT</div>')
+    """主催者へのお問い合わせ欄（LINE オープンチャットのすぐ下に、たたんだ状態で小さく出す）。
+    書いて送るだけ。主催者のメールアドレスなどは相手に表示されない。"""
     with st.container(key="contact"):
-        md('<div class="pk-howto-title">📮 主催者へのお問い合わせ</div>')
-        st.caption("質問・ご意見・「今日少し遅れます」など、なんでも気軽にどうぞ。"
-                   "メールアドレスなどは不要で、ここに書いて送るだけで主催者に直接届きます。"
-                   "ログインして送ると、主催者からの返事がこのアプリに届きます（次にアプリを開いたとき、いちばん上に表示されます）。")
         if done := st.session_state.pop("contact_done", None):
             st.success(done)
-        if me and (mine := my_inquiries(data, me)):
-            with st.expander(f"📬 これまでのお問い合わせと返信（{len(mine)}件）"):
+        mine = my_inquiries(data, me) if me else []
+        label = "📮 主催者へのお問い合わせ" + (f"（これまで {len(mine)} 件）" if mine else "")
+        with st.expander(label, key="contact_open"):
+            st.caption("質問・ご意見・「今日少し遅れます」など、なんでも気軽にどうぞ。書いて送るだけで主催者に届きます。"
+                       + ("返事はこのアプリに届きます（次にアプリを開いたとき、いちばん上に出ます）。" if me
+                          else "ログインしてから送ると、返事がこのアプリに届きます。"))
+            with st.form("contact_form", clear_on_submit=True, border=False):
+                if me:
+                    st.caption(f"お名前：**{me['name']}** さんとして送ります")
+                    name = me["name"]
+                else:
+                    name = st.text_input("お名前（ニックネームでもOK・空欄でもOK）", max_chars=20)
+                body = st.text_area("お問い合わせ内容", max_chars=CONTACT_MAX, height=120,
+                                    placeholder="例：初めてでも参加できますか？／駐車場はありますか？")
+                sent = st.form_submit_button("📨 送る", type="primary", width="stretch")
+            if sent:
+                text = body.strip()
+                last = st.session_state.get("contact_last", 0.0)
+                if not text:
+                    st.warning("お問い合わせ内容を入力してください。")
+                elif time.time() - last < 30:
+                    st.warning("少し時間をおいてから、もう一度送ってください。")
+                else:
+                    who = (name or "").strip() or "（名前なし）"
+                    stamp = now()
+                    _append("inquiries", {"id": new_id(), "created_at": stamp.isoformat(timespec="seconds"),
+                                          "member_id": me["id"] if me else "", "name": who, "body": text, "done": ""})
+                    threading.Thread(target=_send_mail, daemon=True, args=(
+                        f"【やめピック】お問い合わせ：{who} さん",
+                        f"アプリのお問い合わせ欄から届きました。\n\nお名前：{who}"
+                        f"{'（アプリ登録メンバー）' if me else '（ログインしていない方）'}\n"
+                        f"日時：{stamp:%Y/%m/%d %H:%M}\n\n{text}\n")).start()
+                    st.session_state["contact_last"] = time.time()
+                    st.session_state["contact_done"] = "送りました！ありがとうございます 🙏"
+                    st.rerun()
+            if mine:
+                md("**📬 これまでのお問い合わせと返信**")
                 for q in mine:
                     md(inquiry_html(q))
-        with st.form("contact_form", clear_on_submit=True, border=False):
-            if me:
-                st.caption(f"お名前：**{me['name']}** さんとして送ります")
-                name = me["name"]
-            else:
-                name = st.text_input("お名前（ニックネームでもOK・空欄でもOK）", max_chars=20)
-            body = st.text_area("お問い合わせ内容", max_chars=CONTACT_MAX, height=120,
-                                placeholder="例：初めてでも参加できますか？／駐車場はありますか？")
-            sent = st.form_submit_button("📨 送る", type="primary", width="stretch")
-        if sent:
-            text = body.strip()
-            last = st.session_state.get("contact_last", 0.0)
-            if not text:
-                st.warning("お問い合わせ内容を入力してください。")
-            elif time.time() - last < 30:
-                st.warning("少し時間をおいてから、もう一度送ってください。")
-            else:
-                who = (name or "").strip() or "（名前なし）"
-                stamp = now()
-                _append("inquiries", {"id": new_id(), "created_at": stamp.isoformat(timespec="seconds"),
-                                      "member_id": me["id"] if me else "", "name": who, "body": text, "done": ""})
-                threading.Thread(target=_send_mail, daemon=True, args=(
-                    f"【YAME PICK】お問い合わせ：{who} さん",
-                    f"アプリのお問い合わせ欄から届きました。\n\nお名前：{who}"
-                    f"{'（アプリ登録メンバー）' if me else '（ログインしていない方）'}\n"
-                    f"日時：{stamp:%Y/%m/%d %H:%M}\n\n{text}\n")).start()
-                st.session_state["contact_last"] = time.time()
-                st.session_state["contact_done"] = "送りました！ありがとうございます 🙏"
-                st.rerun()
 
 
 def render_gallery(data: dict) -> None:
@@ -2724,6 +2733,7 @@ def render_page(data: dict) -> None:
         render_login()
     render_replies(data, me)
     render_line()
+    render_contact(data, me)
     render_howto(data)
     render_theme(data)
     render_news(data)
@@ -2731,7 +2741,6 @@ def render_page(data: dict) -> None:
     render_events(data, me)
     render_access(data)
     render_gallery(data)
-    render_contact(data, me)
     render_admin(data, me)
 
 
