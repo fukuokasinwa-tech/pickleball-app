@@ -3128,6 +3128,19 @@ def show_api_error(e: gspread.exceptions.APIError) -> None:
         st.error(f"Google スプレッドシートとの通信でエラーが起きました。少し待ってから再読み込みしてください。（{e}）")
 
 
+LIVE_REFRESH = 20  # 秒。参加者・スタンプ・感想を自動で最新にする間隔
+
+
+@st.fragment(run_every=LIVE_REFRESH)
+def live_section(me: dict | None) -> None:
+    """カレンダー・練習会の予定・感想は、開いたままでも20秒ごとに最新にする（この部分だけ入れ替える）。
+    データの読み込みは全員で共有して15秒に1回までなので、開いている人が多くても読み込み回数は増えない。"""
+    data = load_data()
+    render_calendar(data, me)
+    render_events(data, me)
+    render_feedback(data, me)
+
+
 def render_page(data: dict) -> None:
     me = current_member(data)
     if me and not me["pin_hash"] and not me["family_of"]:
@@ -3153,9 +3166,7 @@ def render_page(data: dict) -> None:
     render_contact(data, me)
     render_howto(data)
     render_news(data)
-    render_calendar(data, me)
-    render_events(data, me)
-    render_feedback(data, me)
+    live_section(me)
     render_access(data)
     render_gallery(data)
     render_admin(data, me)
