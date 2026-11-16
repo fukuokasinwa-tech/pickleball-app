@@ -74,9 +74,7 @@ THEME_DEFAULT = {
     "theme_title": "🎯 テーマ",
     "theme_body": "八女でピックルボールを楽しもう‼️\n"
                   "初心者・未経験者・ちょっとやってみたい方も大歓迎🙌\n"
-                  "テーマは「楽しむ」「つながる」「健康になる」\n"
-                  "体験会・練習会の情報はここで発信🎵\n"
-                  "※パドル無料貸出🆓",
+                  "テーマは「楽しむ」「つながる」「健康になる」",
 }
 # 「ACCESS」欄の初期値。管理者メニューの「📍 場所」で書き換えると settings シートに保存される
 ACCESS_DEFAULT = {
@@ -1075,6 +1073,11 @@ def render_line() -> None:
 def hero_theme_html(data: dict) -> str:
     """トップの黒いエリアに入れるテーマ（管理者メニューの「🎯 テーマ」で書き換えられる）。"""
     title, body = (setting(data, k).strip() for k in THEME_DEFAULT)
+    # 以前の文に残っている「体験会・練習会の情報は…」「※パドル無料貸出」の行は消す（1回だけ保存し直す）
+    old_lines = ("体験会・練習会の情報はここで発信", "※パドル無料貸出")
+    if any(x in body for x in old_lines):
+        body = "\n".join(l for l in body.split("\n") if not l.strip().startswith(old_lines)).strip()
+        save_setting(data, "theme_body", body)
     if not (title or body):
         return ""
     body_html = re.sub(r"「([^」]+)」", r'<span class="pk-hmark">「\1」</span>', esc(body)).replace("\n", "<br>")
