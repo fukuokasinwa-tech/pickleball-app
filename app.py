@@ -784,6 +784,12 @@ a.pk-map-btn {
 .st-key-fb_prev button, .st-key-fb_next button { border: 2px solid var(--ink) !important; border-radius: 999px !important;
   font-weight: 900 !important; background: #FFE0EE !important; }
 .st-key-fb_archive [class*="st-key-fbcard_"] { margin-right: 0; box-shadow: none; }
+a.pk-voice-jump { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 8px 18px 0;
+  padding: 12px 14px; border-radius: 999px; color: #fff !important; text-decoration: none !important;
+  font-weight: 900; font-size: 1.02rem; border: 3px solid var(--ink); box-shadow: 4px 5px 0 var(--ink);
+  background: linear-gradient(120deg, #FE971A 0%, #FF6FA8 55%, #A66CFF 100%); text-shadow: 0 1px 0 rgba(0,0,0,.2); }
+a.pk-voice-jump:active { transform: translate(2px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+a.pk-voice-jump span { font-size: .8rem; }
 .pk-fb-banner { margin: -4px 8px 18px 0; padding: 14px 16px; border-radius: 22px; text-align: center; color: #fff;
   background: linear-gradient(120deg, #FE971A 0%, #FF6FA8 55%, #A66CFF 100%); border: 3px solid var(--ink);
   box-shadow: 5px 7px 0 0 var(--ink); }
@@ -3189,6 +3195,8 @@ def render_page(data: dict) -> None:
     remember_login(me)
     pull_to_refresh()
     render_hero(data, me)
+    if any(e["date"] < today() for e in data["events"]):  # 感想の欄へ飛ぶ目立つボタン
+        md('<a class="pk-voice-jump" href="#sec-voice">🎉 参加された方の感想はこちら <span>▼</span></a>')
     if not me:  # 使い方は、はじめて名前を登録する人（ログイン前）にだけ見せる
         render_howto(data)
     md(HERO_INFO_HTML)
