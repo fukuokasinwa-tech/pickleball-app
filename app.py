@@ -752,29 +752,42 @@ a.pk-map-btn {
 .st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
 
 /* ---- 練習会の感想 ---- */
-[class*="st-key-fbcard_"] {  /* 終わった練習会＝感想を書くカード */
-  background: #fff; border: 2.5px solid var(--ink); border-radius: 14px; padding: 10px 12px 4px;
-  margin: 0 8px 12px 0; gap: 8px;
+[class*="st-key-fbcard_"] {  /* 終わった練習会＝感想を書くカード（明るく華やかに） */
+  background: linear-gradient(160deg, #FFF8E1 0%, #FFE9D2 45%, #FFE3EE 100%);
+  border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 6px;
+  box-shadow: 5px 7px 0 0 #FF6FA8, 5px 7px 0 3px var(--ink); margin: 0 8px 24px 0; gap: 8px;
 }
+.pk-fb-banner { margin: -4px 8px 18px 0; padding: 14px 16px; border-radius: 22px; text-align: center; color: #fff;
+  background: linear-gradient(120deg, #FE971A 0%, #FF6FA8 55%, #A66CFF 100%); border: 3px solid var(--ink);
+  box-shadow: 5px 7px 0 0 var(--ink); }
+.pk-fb-banner-t { font-size: 1.3rem; font-weight: 900; letter-spacing: .04em; text-shadow: 0 2px 0 rgba(0,0,0,.18); }
+.pk-fb-banner-s { font-size: .85rem; font-weight: 800; margin-top: 4px; }
 .pk-fb-head { display: flex; gap: 12px; align-items: center; }
 .pk-fb-head .cal-chip { margin-left: 6px; }
-.pk-fb-lead { font-weight: 800; color: #555; font-size: .88rem; margin: -6px 0 12px; }
 .pk-fb-mem { font-weight: 900; font-size: .85rem; margin-top: 8px; color: #555; }
 .pk-fb-names { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 22px; }
-.pk-fb-name { background: #FFF1DE; border: 1.5px solid var(--brand); border-radius: 999px; padding: 2px 10px;
+.pk-fb-name { background: #fff; border: 1.5px solid #FF6FA8; border-radius: 999px; padding: 2px 10px;
               font-weight: 800; font-size: .82rem; }
 .pk-fb-none { color: #999; font-size: .82rem; }
 [class*="st-key-fbrow_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
 [class*="st-key-fb_st_"] button { white-space: pre-line !important; line-height: 1.25 !important; padding: 6px 2px !important;
   border-radius: 14px !important; font-weight: 800 !important; font-size: .78rem !important; min-height: 58px;
   border: 2px solid var(--ink) !important; background: #fff !important; color: var(--ink) !important; }
-[class*="st-key-fb_st_"] button[kind="primary"] { background: var(--brand) !important; }
+[class*="st-key-fb_st_"][class*="_fun"] button { background: #FFF3B0 !important; }
+[class*="st-key-fb_st_"][class*="_sweat"] button { background: #D9F5E5 !important; }
+[class*="st-key-fb_st_"][class*="_up"] button { background: #DCEBFF !important; }
+[class*="st-key-fb_st_"][class*="_again"] button { background: #FFE0EE !important; }
+[class*="st-key-fbcard_"] [data-testid="stFormSubmitButton"] button { background: linear-gradient(135deg, #FE971A, #FF6FA8) !important;
+  color: #fff !important; border: 2px solid var(--ink) !important; font-weight: 900 !important; }
+[class*="st-key-fb_st_"] button[kind="primary"] { background: linear-gradient(135deg, #FE971A, #FF6FA8) !important;
+  color: #fff !important; transform: translateY(-2px); box-shadow: 0 4px 0 var(--ink) !important; }
 [class*="st-key-fb_st_"] button p { white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
   word-break: keep-all; font-size: .78rem !important; }
 [class*="st-key-fb_del_"] { margin-top: -10px; }
 [class*="st-key-fb_del_"] button { border: none !important; background: transparent !important; padding: 0 4px !important;
   min-height: 0 !important; color: #999 !important; font-size: .75rem !important; }
-.pk-fb { background: #F3F3EF; border-radius: 12px; padding: 6px 12px; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
+.pk-fb { background: #fff; border: 2px solid #FFC2DA; border-radius: 16px 16px 16px 4px; padding: 6px 12px; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
+.pk-fb b { color: #E0457F; }
 
 /* ---- 管理者向け：未対応のお問い合わせ ---- */
 .st-key-inq_alert { border-color: #E60012 !important; box-shadow: 5px 7px 0 0 #E60012, 5px 7px 0 3px var(--ink) !important; }
@@ -809,6 +822,8 @@ a.pk-insta .ig { font-size: 1.1rem; }
 }
 .st-key-login_js, div:has(> .st-key-login_js) { display: none !important; }
 .st-key-ptr_js, div:has(> .st-key-ptr_js) { display: none !important; }
+.pk-fx { position: fixed; z-index: 9999; font-size: 26px; pointer-events: none; will-change: transform, opacity; }
+[class*="st-key-fb_st_"] button:active { transform: scale(.92) !important; }
 #pk-ptr { position: fixed; top: 10px; left: 50%; transform: translate(-50%, 0); z-index: 9999; opacity: 0; pointer-events: none;
           background: var(--ink); color: #fff; font-weight: 900; font-size: .85rem; padding: 8px 16px; border-radius: 999px;
           border: 2px solid var(--brand); transition: opacity .15s; }
@@ -940,10 +955,51 @@ PULL_TO_REFRESH_JS = """
 """
 
 
+TAP_FX_JS = """
+(function () {
+  if (window.__pkFX) return;             // 1回だけ付ける
+  window.__pkFX = true;
+  // 押したボタンから、絵文字がはじけて飛ぶ演出
+  function burst(el, emojis) {
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    for (let i = 0; i < 14; i++) {
+      const p = document.createElement('span');
+      p.className = 'pk-fx';
+      p.textContent = emojis[i % emojis.length];
+      p.style.left = cx + 'px';
+      p.style.top = cy + 'px';
+      document.body.appendChild(p);
+      const ang = (Math.PI * 2 * i) / 14 + Math.random() * 0.5;
+      const dist = 60 + Math.random() * 70;
+      const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist - 60;
+      p.animate([
+        { transform: 'translate(-50%,-50%) scale(.4) rotate(0deg)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(1.3) rotate(${(Math.random() - .5) * 120}deg)`, opacity: 1, offset: .6 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 70}px)) scale(.9)`, opacity: 0 }
+      ], { duration: 1100 + Math.random() * 300, easing: 'cubic-bezier(.2,.8,.3,1)' }).onfinish = () => p.remove();
+    }
+  }
+  document.addEventListener('click', (e) => {
+    const stamp = e.target.closest('[class*="st-key-fb_st_"] button');
+    if (stamp && !stamp.disabled) {
+      const em = (stamp.innerText.trim().match(/^\\S+/) || ['✨'])[0];
+      burst(stamp, [em, '✨', em, '🎉']);
+      return;
+    }
+    const btn = e.target.closest('button');
+    if (btn && !btn.disabled && /参加する/.test(btn.innerText) && !/参加予定/.test(btn.innerText)) {
+      burst(btn, ['🎉', '🏓', '✨', '🎊']);
+    }
+  }, true);
+})();
+"""
+
+
 def pull_to_refresh() -> None:
     """スマホで画面のいちばん上を下に引っ張ると、ページを読み込み直す。"""
     with st.container(key="ptr_js"):  # 画面には何も出さない（CSSで非表示）
-        st.html(f"<script>{PULL_TO_REFRESH_JS}</script>", unsafe_allow_javascript=True)
+        st.html(f"<script>{PULL_TO_REFRESH_JS}{TAP_FX_JS}</script>", unsafe_allow_javascript=True)
 
 
 def remember_login(me: dict | None) -> None:
@@ -1617,7 +1673,7 @@ def render_events(data: dict, me: dict | None) -> None:
 # 練習会の感想（スタンプ＋ひとこと）
 # ---------------------------------------------------------------------------
 
-FEEDBACK_STAMPS = [("fun", "😆", "楽しい"), ("sweat", "💪", "いい汗"), ("up", "🏓", "上達"), ("tired", "😅", "疲れた")]
+FEEDBACK_STAMPS = [("fun", "😆", "楽しい"), ("sweat", "💪", "いい汗"), ("up", "🏓", "上達"), ("again", "🙋", "また参加したい")]
 FEEDBACK_MAX = 100      # ひとことの最大文字数
 FEEDBACK_RECENT = 3     # 感想カードを出す、終わった練習会の数（新しい順）
 
@@ -1628,7 +1684,8 @@ def render_feedback(data: dict, me: dict | None) -> None:
     if not recent:
         return
     md('<div class="pk-h" id="sec-voice">VOICE</div>')
-    md('<div class="pk-fb-lead">💬 終わった練習会の感想。スタンプを押したり、ひとこと書いたりできます。</div>')
+    md('<div class="pk-fb-banner"><div class="pk-fb-banner-t">🎉 みんなの感想 🎉</div>'
+       '<div class="pk-fb-banner-s">練習会、どうでしたか？スタンプをポチッ、ひとことでもうれしいです✨</div></div>')
     for e in recent:
         feedback_card(data, e, me)
 
