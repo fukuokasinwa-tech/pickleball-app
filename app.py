@@ -512,7 +512,14 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-title .y { color: var(--brand); }
 .pk-sub { color: #cfcfcf; margin-top: 14px; font-weight: 700; }
 /* トップの黒いエリアの中のテーマ */
-.pk-htheme { position: relative; margin-top: 44px; padding: 12px 14px; border-radius: 16px;
+.pk-hinfo { position: relative; margin-top: 44px; }
+.pk-hinfo-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 6px; }
+.pk-hinfo-g { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pk-hinfo-i { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.08); border-radius: 12px;
+              padding: 6px 8px; color: #fff; font-weight: 800; font-size: .8rem; line-height: 1.3; }
+.pk-hinfo-i b { font-size: 1.05rem; }
+.pk-hinfo-i:first-child { background: var(--brand); color: var(--ink); }
+.pk-htheme { position: relative; margin-top: 12px; padding: 12px 14px; border-radius: 16px;
              background: rgba(255,255,255,.07); border: 1.5px solid rgba(254,151,26,.55); }
 .pk-htheme-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 4px; }
 .pk-htheme-b { color: #f2f2f2; font-weight: 700; font-size: .92rem; line-height: 1.65; }
@@ -794,6 +801,10 @@ a.pk-insta .ig { font-size: 1.1rem; }
   padding: 0 10px; margin-right: 8px; font-size: .85rem;
 }
 .st-key-login_js, div:has(> .st-key-login_js) { display: none !important; }
+.st-key-ptr_js, div:has(> .st-key-ptr_js) { display: none !important; }
+#pk-ptr { position: fixed; top: 10px; left: 50%; transform: translate(-50%, 0); z-index: 9999; opacity: 0; pointer-events: none;
+          background: var(--ink); color: #fff; font-weight: 900; font-size: .85rem; padding: 8px 16px; border-radius: 999px;
+          border: 2px solid var(--brand); transition: opacity .15s; }
 
 /* ---- 管理者メニューのタブ：スマホでも全部見えるよう折り返して並べる ---- */
 .stTabs [role="tablist"] { flex-wrap: wrap; gap: 6px 8px; overflow: visible !important; padding-bottom: 6px; }
@@ -885,6 +896,49 @@ def sign_out() -> None:
     st.session_state["_clear_login"] = True
 
 
+PULL_TO_REFRESH_JS = """
+(function () {
+  if (window.__pkPTR) return;           // 画面が更新されるたびに何度も付けない
+  window.__pkPTR = true;
+  const THRESHOLD = 80;                 // これだけ下に引っ張ったら更新
+  const ind = document.createElement('div');
+  ind.id = 'pk-ptr';
+  ind.textContent = '↓ 引っ張って更新';
+  document.body.appendChild(ind);
+  const scroller = () => document.querySelector('[data-testid="stMain"]') || document.scrollingElement;
+  let y0 = null, dy = 0;
+  document.addEventListener('touchstart', (e) => {
+    y0 = (scroller().scrollTop <= 0 && e.touches.length === 1) ? e.touches[0].clientY : null;
+    dy = 0;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || scroller().scrollTop > 0) { ind.style.opacity = 0; return; }
+    ind.style.opacity = Math.min(dy / THRESHOLD, 1);
+    ind.style.transform = 'translate(-50%, ' + Math.min(dy, 140) / 2 + 'px)';
+    ind.textContent = dy > THRESHOLD ? '↻ はなすと更新' : '↓ 引っ張って更新';
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (y0 !== null && dy > THRESHOLD && scroller().scrollTop <= 0) {
+      ind.textContent = '更新しています…';
+      location.reload();
+    } else {
+      ind.style.opacity = 0;
+      ind.style.transform = 'translate(-50%, 0)';
+    }
+    y0 = null; dy = 0;
+  }, { passive: true });
+})();
+"""
+
+
+def pull_to_refresh() -> None:
+    """スマホで画面のいちばん上を下に引っ張ると、ページを読み込み直す。"""
+    with st.container(key="ptr_js"):  # 画面には何も出さない（CSSで非表示）
+        st.html(f"<script>{PULL_TO_REFRESH_JS}</script>", unsafe_allow_javascript=True)
+
+
 def remember_login(me: dict | None) -> None:
     """ブラウザのクッキーと localStorage にログイン情報を保存・削除する。
 
@@ -924,7 +978,7 @@ def render_hero(data: dict, me: dict | None) -> None:
 <div class="pk-hero-text">
   <div class="pk-kicker">PICKLEBALL COMMUNITY</div>
   <div class="pk-title">YAME <span class="y">PICK</span><br>参加確認</div>
-</div>{hero_theme_html(data)}""")
+</div>{HERO_INFO_HTML}{hero_theme_html(data)}""")
         if not me:
             return
         with st.container(key="hero_actions", horizontal=True, gap="small"):
@@ -1068,6 +1122,13 @@ def render_line() -> None:
   <div class="pk-line-sub">練習会のお知らせや情報交換はこちら。LINEの友だち追加なしで、ニックネームで参加できます。</div>
   {line_link("オープンチャットに参加する")}
 </div>''')
+
+
+# トップの「参加確認」のすぐ下に出す、持ち物などの案内
+HERO_INFO = [("🏓", "パドル（ラケット）無料貸出"), ("👟", "動きやすい服装・運動靴"),
+             ("🧺", "タオル・飲み物"), ("🥤", "体育館に自販機あり")]
+HERO_INFO_HTML = ('<div class="pk-hinfo"><div class="pk-hinfo-t">🎒 練習の日の持ち物・ご案内</div><div class="pk-hinfo-g">'
+                  + "".join(f'<span class="pk-hinfo-i"><b>{i}</b>{t}</span>' for i, t in HERO_INFO) + "</div></div>")
 
 
 def hero_theme_html(data: dict) -> str:
@@ -2955,6 +3016,7 @@ def render_page(data: dict) -> None:
         st.session_state["need_pin"] = me["name"]
         me = None
     remember_login(me)
+    pull_to_refresh()
     render_hero(data, me)
     render_nav(data)
     if msg := st.session_state.pop("flash", None):
