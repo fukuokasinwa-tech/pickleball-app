@@ -2244,7 +2244,7 @@ SALES_DEST = "ピックルボール練習会・体験会"
 
 def load_sales(data: dict) -> dict:
     """売上表の設定（事業所名・No.・手で直した売上金・備考など）。settings シートに JSON で保存。"""
-    cfg = {"office": "2101　Ｌｉｎｋ", "no": "", "amounts": {}, "notes": {}, "dests": {}, "excluded": []}
+    cfg = {"office": "2101　Ｌｉｎｋ", "no": "", "amounts": {}, "notes": {}, "dests": {}, "excluded": [], "months": {}}
     if row := find(data["settings"], SALES_KEY):
         try:
             cfg |= json.loads(row["value"])
@@ -2399,10 +2399,81 @@ def apply_sales_voice(data: dict, cfg: dict, events: list[dict], autos: dict) ->
     st.rerun()
 
 
+def event_sales(data: dict, cfg: dict, ev: dict) -> int:
+    """その練習会の売上金（手で直した金額があればそれ、なければ自動計算）。"""
+    return int(cfg["amounts"].get(ev["id"], auto_sales(data, ev)))
+
+
+def fiscal_year(d: date) -> int:
+    """年度（4月〜翌年3月）。2027年2月 → 2026年度。"""
+    return d.year if d.month >= 4 else d.year - 1
+
+
+def month_key(y: int, m: int) -> str:
+    return f"{y}-{m:02d}"
+
+
+def render_sales_summary(data: dict, cfg: dict) -> None:
+    """年度（4月〜3月）の月別売上と、総売上。
+    月ごとの金額は、アプリの記録（終わった練習会の売上金）から自動で出す。
+    アプリに記録がない月などは、その月の金額を直接入力できる（入力した月はその金額を使う）。"""
+    manual = {k: int(v) for k, v in cfg.get("months", {}).items()}
+    past = [e for e in data["events"] if e["date"] <= today() and e["id"] not in cfg["excluded"]]
+    app_month: dict[str, list[int]] = {}
+    for e in past:
+        d = date.fromisoformat(e["date"])
+        app_month.setdefault(month_key(d.year, d.month), []).append(event_sales(data, cfg, e))
+    month_total = {k: sum(v) for k, v in app_month.items()} | manual
+    grand = sum(month_total.values())
+
+    years = sorted({fiscal_year(date(int(k[:4]), int(k[5:]), 1)) for k in month_total}
+                   | {fiscal_year(date.fromisoformat(today()))}, reverse=True)
+    with st.container(border=True):
+        fy = st.selectbox("年度", years, format_func=lambda y: f"{y}年度（{y}年4月〜{y + 1}年3月）", key="sl_fy")
+        months = [(fy, m) for m in range(4, 13)] + [(fy + 1, m) for m in range(1, 4)]
+        fy_total = sum(month_total.get(month_key(y, m), 0) for y, m in months)
+        c1, c2 = st.columns(2)
+        c1.metric(f"{fy}年度の売上", f"{fy_total:,}円")
+        c2.metric("総売上（これまでの全部）", f"{grand:,}円")
+        rows = [{"月": f"{y}年{m}月",
+                 "アプリの記録": sum(app_month.get(month_key(y, m), [])),
+                 "回数": len(app_month.get(month_key(y, m), [])),
+                 "直接入力": manual.get(month_key(y, m))} for y, m in months]
+        with st.expander("📊 月別の売上（直接入力もできます）"):
+            st.caption("「直接入力」に金額を入れた月は、その金額で集計します（アプリの記録より優先）。"
+                       "空欄（薄く「None」と出ているところ）に戻すと、アプリの記録に戻ります。入力したら「💾 月別を保存」を押してください。")
+            import pandas as pd  # 空欄を「None」ではなく空白で見せるため、表は pandas で渡す
+            frame = pd.DataFrame(rows).astype({"直接入力": "float"})
+            edited = st.data_editor(frame, key=f"sl_months_{fy}", hide_index=True, width="stretch", num_rows="fixed",
+                                    disabled=["月", "アプリの記録", "回数"],
+                                    column_config={
+                                        "月": st.column_config.TextColumn("月", width="small"),
+                                        "アプリの記録": st.column_config.NumberColumn("アプリの記録", format="%,d"),
+                                        "回数": st.column_config.NumberColumn("回数", format="%d回", width="small"),
+                                        "直接入力": st.column_config.NumberColumn("直接入力（円）✏️", min_value=0, step=100,
+                                                                              format="%,d"),
+                                    })
+            if st.button("💾 月別を保存", key="sl_months_save", width="stretch"):
+                new = dict(cfg.get("months", {}))
+                for (y, m), v in zip(months, edited["直接入力"].tolist()):
+                    if v is None or v != v:  # 空欄（NaN）
+                        new.pop(month_key(y, m), None)
+                    else:
+                        new[month_key(y, m)] = int(v)
+                cfg["months"] = new
+                save_setting(data, SALES_KEY, json.dumps(cfg, ensure_ascii=False))
+                st.session_state.pop(f"sl_months_{fy}", None)
+                st.session_state["flash"] = f"{fy}年度の月別を保存しました。"
+                st.rerun()
+        st.caption("アプリの記録は、終わった練習会の売上金の合計です（主催者など「参加費がかからない人」は0円で計算。"
+                   "下の表で手入力した金額があればその金額）。")
+
+
 def admin_sales(data: dict) -> None:
     st.caption("練習会ごとの売上金をまとめて、授産売上金提出表（Excel・A4縦）を作ります。"
                "売上金は「🎾 対戦表」の参加者と参加費から自動で入ります（主催者は0円）。表の「売上金」を押すと直接書き換えられます。")
     cfg = load_sales(data)
+    render_sales_summary(data, cfg)
     t = date.fromisoformat(today())
     c1, c2 = st.columns(2)
     start = c1.date_input("期間（はじめ）", value=t.replace(day=1), format="YYYY/MM/DD", key="sl_start")
