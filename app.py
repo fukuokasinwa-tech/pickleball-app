@@ -757,11 +757,12 @@ a.pk-map-btn {
   border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 6px;
   box-shadow: 5px 7px 0 0 #FF6FA8, 5px 7px 0 3px var(--ink); margin: 0 8px 24px 0; gap: 8px;
 }
-.st-key-fb_archive { background: #fff; border: 3px dashed #FF6FA8; border-radius: 22px; padding: 12px 10px 4px; margin: 4px 8px 22px 0; }
-.pk-fb-arc-t { font-weight: 900; font-size: 1.05rem; text-align: center; color: #E0457F; }
+.st-key-fb_archive { background: #fff; border: 3px dashed #FF6FA8; border-radius: 22px; padding: 8px 10px; margin: 4px 8px 22px 0; }
 .st-key-fb_arc_nav { justify-content: space-between; }
 .st-key-fb_arc_nav > div:nth-child(2) { flex: 1 1 auto !important; }
-.pk-fb-arc-now { text-align: center; font-weight: 900; font-size: 1.05rem; }
+.pk-fb-arc-now { text-align: center; font-weight: 900; font-size: 1.05rem; color: #E0457F; }
+.st-key-fb_arc_nav [data-testid="stMarkdownContainer"], .st-key-fb_arc_nav [data-testid="stMarkdown"] { margin: 0 !important; }
+.st-key-fb_arc_nav .pk-fb-arc-now { line-height: 2.4rem; }
 .pk-fb-arc-now span { margin-left: 6px; font-size: .75rem; color: #888; font-weight: 800; }
 .st-key-fb_prev button, .st-key-fb_next button { border: 2px solid var(--ink) !important; border-radius: 999px !important;
   font-weight: 900 !important; background: #FFE0EE !important; }
@@ -1705,19 +1706,22 @@ def render_feedback(data: dict, me: dict | None) -> None:
 
 
 def render_feedback_archive(data: dict, me: dict | None, older: list[dict]) -> None:
-    """それより前の練習会の感想は、◀ ▶ で1回ずつめくって見る。"""
-    i = min(st.session_state.get("fb_page", 0), len(older) - 1)
-    ev = older[i]
-    d = date.fromisoformat(ev["date"])
+    """それより前の練習会の感想。最初は見出しと「◀ 前」だけ。押すと1回ずつさかのぼり、「次 ▶」で戻る。
+    fb_page = -1 は何も開いていない状態、0 以降は older の何番目を見ているか。"""
+    i = max(-1, min(st.session_state.get("fb_page", -1), len(older) - 1))
     with st.container(key="fb_archive"):
-        md(f'<div class="pk-fb-arc-t">📚 前の練習会の感想</div>')
         nav = st.container(horizontal=True, gap="small", wrap=False, vertical_alignment="center", key="fb_arc_nav")
-        if nav.button("◀ 前", key="fb_prev", disabled=i >= len(older) - 1, help="ひとつ前の練習会"):
+        if nav.button("◀ 前", key="fb_prev", disabled=i >= len(older) - 1, help="ひとつ前の練習会の感想を見る"):
             st.session_state["fb_page"] = i + 1
             st.rerun()
+        if i < 0:
+            nav.markdown("<div class='pk-fb-arc-now'>📚 前の練習会の感想</div>", unsafe_allow_html=True)
+            return
+        ev = older[i]
+        d = date.fromisoformat(ev["date"])
         nav.markdown(f"<div class='pk-fb-arc-now'>{d.month}/{d.day}（{'月火水木金土日'[d.weekday()]}）"
                      f"<span>{i + 1}/{len(older)}</span></div>", unsafe_allow_html=True)
-        if nav.button("次 ▶", key="fb_next", disabled=i <= 0, help="ひとつ新しい練習会"):
+        if nav.button("次 ▶", key="fb_next", help="ひとつ新しい練習会へ（いちばん新しいところで閉じます）"):
             st.session_state["fb_page"] = i - 1
             st.rerun()
         feedback_card(data, ev, me)
