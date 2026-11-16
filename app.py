@@ -758,6 +758,7 @@ a.pk-map-btn {
 }
 .pk-fb-head { display: flex; gap: 12px; align-items: center; }
 .pk-fb-head .cal-chip { margin-left: 6px; }
+.pk-fb-lead { font-weight: 800; color: #555; font-size: .88rem; margin: -6px 0 12px; }
 .pk-fb-mem { font-weight: 900; font-size: .85rem; margin-top: 8px; color: #555; }
 .pk-fb-names { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 22px; }
 .pk-fb-name { background: #FFF1DE; border: 1.5px solid var(--brand); border-radius: 999px; padding: 2px 10px;
@@ -1106,14 +1107,14 @@ def line_link(text: str) -> str:
             f'<span class="ln">LINE</span>{esc(text)}</a>')
 
 
-NAV_ITEMS = [("schedule", "🏓", "参加する"), ("calendar", "📅", "カレンダー"), ("news", "📣", "お知らせ"),
-             ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE")]
+NAV_ITEMS = [("schedule", "🏓", "参加する"), ("calendar", "📅", "カレンダー"), ("voice", "😆", "感想"),
+             ("news", "📣", "お知らせ"), ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE")]
 
 
 def render_nav(data: dict) -> None:
     """トップのすぐ下に、各コーナーへ飛べるボタンを並べる（押すとその場所までスクロール）。
     お知らせ・ギャラリー・場所は、中身があるときだけ出す。"""
-    shown = {"news": bool(data["news"]),
+    shown = {"news": bool(data["news"]), "voice": any(e["date"] < today() for e in data["events"]),
              "gallery": any(gallery_status(g) == "on" for g in data["gallery"]),
              "access": any(setting(data, k).strip() for k in list(ACCESS_DEFAULT)[:2])}
     links = "".join(f'<a class="pk-nav-i" href="#sec-{k}"><span>{i}</span>{t}</a>'
@@ -1575,15 +1576,9 @@ def render_calendar(data: dict, me: dict | None = None) -> None:
     md(f'<div class="cal-grid">{head}{"".join(cells)}</div>')
 
     # カレンダーの下に、その月の練習会を一覧で
-    # 終わった練習会は、直近の3回だけを感想を書くカードとして出す。
-    # 今月を表示しているときは、前の月の分も含めて直近3回を一覧の先頭に出す
-    recent_done = [e for e in data["events"] if e["date"] < t][-FEEDBACK_RECENT:]
-    this_month = t[:7] == f"{y}-{m:02d}"
-    shown = [e for e in recent_done if this_month or e["date"].startswith(f"{y}-{m:02d}")]
-    for e in shown:
-        feedback_card(data, e, me)
-    if not shown and not [e for e in month_events if e["date"] >= t]:
-        md('<div class="ev-empty">この月の練習会はまだありません。</div>')
+    # カレンダーの下の一覧は、これからの練習会だけ（終わった練習会の感想は「VOICE」に別で出す）
+    if not [e for e in month_events if e["date"] >= t]:
+        md('<div class="ev-empty">この月のこれからの練習会はありません。</div>')
     for e in month_events:
         if e["date"] < t:
             continue
@@ -1625,6 +1620,17 @@ def render_events(data: dict, me: dict | None) -> None:
 FEEDBACK_STAMPS = [("fun", "😆", "楽しい"), ("sweat", "💪", "いい汗"), ("up", "🏓", "上達"), ("tired", "😅", "疲れた")]
 FEEDBACK_MAX = 100      # ひとことの最大文字数
 FEEDBACK_RECENT = 3     # 感想カードを出す、終わった練習会の数（新しい順）
+
+
+def render_feedback(data: dict, me: dict | None) -> None:
+    """練習会の感想（直近3回・新しい順）。予定表とは別の場所に出す。"""
+    recent = [e for e in data["events"] if e["date"] < today()][-FEEDBACK_RECENT:][::-1]
+    if not recent:
+        return
+    md('<div class="pk-h" id="sec-voice">VOICE</div>')
+    md('<div class="pk-fb-lead">💬 終わった練習会の感想。スタンプを押したり、ひとこと書いたりできます。</div>')
+    for e in recent:
+        feedback_card(data, e, me)
 
 
 def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
@@ -3052,6 +3058,7 @@ def render_page(data: dict) -> None:
     render_news(data)
     render_calendar(data, me)
     render_events(data, me)
+    render_feedback(data, me)
     render_access(data)
     render_gallery(data)
     render_admin(data, me)
