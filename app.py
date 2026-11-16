@@ -754,7 +754,12 @@ a.pk-map-btn {
 .st-key-contact { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #E60012;
                   padding: 14px 16px 6px; margin: 6px 0 22px; }
 .pk-contact-title { font-weight: 900; font-size: 1.02rem; line-height: 1.45; text-align: center; margin-bottom: 2px; }
-.pk-contact-sub { font-size: .85rem; color: #555; line-height: 1.5; text-align: center; margin-bottom: 8px; }
+.pk-contact-sub { font-size: .88rem; color: #333; font-weight: 800; line-height: 1.5; text-align: center; margin-bottom: 8px; }
+/* お問い合わせの欄の文字は全体に太く（入力欄・送るボタン・詳しく） */
+.st-key-contact p, .st-key-contact textarea, .st-key-contact input, .st-key-contact button,
+.st-key-contact summary, .st-key-contact [data-testid="stCaptionContainer"] { font-weight: 900 !important; }
+.st-key-contact textarea::placeholder, .st-key-contact input::placeholder { font-weight: 800; }
+.st-key-contact [data-testid="stCaptionContainer"] { color: #444 !important; }
 .st-key-contact details { border: none !important; }
 .st-key-contact button[kind="primaryFormSubmit"], .st-key-contact [data-testid="stBaseButton-primaryFormSubmit"] {
   background: #E60012 !important; border: 2.5px solid var(--ink) !important; color: #fff !important; font-weight: 900 !important;
@@ -834,7 +839,7 @@ a.pk-map-btn {
 .pk-line-box { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #06C755;
                padding: 14px 16px 16px; margin: 6px 0 18px; text-align: center; }
 .pk-line-title { font-weight: 900; font-size: 1.02rem; line-height: 1.45; }
-.pk-line-sub { font-size: .85rem; color: #555; margin: 4px 0 12px; line-height: 1.5; }
+.pk-line-sub { font-size: .88rem; color: #333; font-weight: 800; margin: 4px 0 12px; line-height: 1.5; }
 a.pk-line {
   display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 16px; border-radius: 999px;
   background: #06C755; color: #fff !important; font-weight: 900; font-size: 1.02rem; text-decoration: none !important;
