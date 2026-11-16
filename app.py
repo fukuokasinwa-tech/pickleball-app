@@ -1183,7 +1183,7 @@ def line_link(text: str) -> str:
 
 
 NAV_ITEMS = [("schedule", "🏓", "参加する"), ("calendar", "📅", "カレンダー"), ("voice", "😆", "感想"),
-             ("news", "📣", "お知らせ"), ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE"),
+             ("news", "📣", "お知らせ"), ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "オプチャ"),
              ("contact", "📮", "問い合わせ")]
 
 
