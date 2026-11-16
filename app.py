@@ -1686,8 +1686,6 @@ def render_events(data: dict, me: dict | None) -> None:
     upcoming = [e for e in data["events"] if e["date"] >= today()]
     past = [e for e in data["events"] if e["date"] < today()]
     md('<div class="pk-h" id="sec-schedule">SCHEDULE</div>')
-    md('<div class="pk-join-tip">💡 行ける日の<b>「🏓 参加する」</b>を押すと<b>参加予定</b>になります。'
-       '行けなくなったら<b>「✅ 参加予定」</b>をもう一度押すと取り消せます。</div>')
     if not upcoming:
         md('<div class="ev-empty">次の練習会はまだ決まっていません。お楽しみに！</div>')
     for ev in upcoming:
