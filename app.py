@@ -519,8 +519,8 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-htheme-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 4px; }
 .pk-htheme-b { color: #f2f2f2; font-weight: 700; font-size: .92rem; line-height: 1.65; }
 .pk-hmark { color: var(--brand); font-weight: 900; }
-a.pk-hinsta { display: inline-block; margin-top: 8px; color: #fff !important; font-weight: 800; font-size: .85rem;
-              text-decoration: none !important; border-bottom: 1.5px solid var(--brand); }
+.pk-hinsta-row { margin-top: 10px; }  /* Instagram ボタンは前と同じ色（グラデーション） */
+.pk-hinsta-row a.pk-insta { border-color: #fff; box-shadow: 3px 4px 0 rgba(255,255,255,.35); }
 .st-key-hero_actions { position: relative; z-index: 1; margin-top: 6px; align-items: center; }
 .pk-count-chip {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
@@ -1080,7 +1080,7 @@ def hero_theme_html(data: dict) -> str:
     body_html = re.sub(r"「([^」]+)」", r'<span class="pk-hmark">「\1」</span>', esc(body)).replace("\n", "<br>")
     return (f'<div class="pk-htheme"><div class="pk-htheme-t">{esc(title)}</div>'
             f'<div class="pk-htheme-b">{body_html}</div>'
-            f'<a class="pk-hinsta" href="{INSTAGRAM_URL}" target="_blank" rel="noopener">📷 @yamepick をフォロー</a></div>')
+            f'<div class="pk-hinsta-row">{instagram_link("@yamepick をフォロー")}</div></div>')
 
 
 def render_theme(data: dict) -> None:
