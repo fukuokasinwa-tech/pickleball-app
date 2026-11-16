@@ -771,7 +771,7 @@ a.pk-map-btn {
 .pk-fb-none { color: #999; font-size: .82rem; }
 [class*="st-key-fbrow_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
 [class*="st-key-fb_st_"] button { white-space: pre-line !important; line-height: 1.25 !important; padding: 6px 2px !important;
-  border-radius: 14px !important; font-weight: 800 !important; font-size: .78rem !important; min-height: 58px;
+  border-radius: 14px !important; font-weight: 900 !important; font-size: .82rem !important; min-height: 58px;
   border: 2px solid var(--ink) !important; background: #fff !important; color: var(--ink) !important; }
 [class*="st-key-fb_st_"][class*="_fun"] button { background: #FFF3B0 !important; }
 [class*="st-key-fb_st_"][class*="_sweat"] button { background: #D9F5E5 !important; }
@@ -782,7 +782,7 @@ a.pk-map-btn {
 [class*="st-key-fb_st_"] button[kind="primary"] { background: linear-gradient(135deg, #FE971A, #FF6FA8) !important;
   color: #fff !important; transform: translateY(-2px); box-shadow: 0 4px 0 var(--ink) !important; }
 [class*="st-key-fb_st_"] button p { white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
-  word-break: keep-all; font-size: .78rem !important; }
+  word-break: keep-all; font-size: .82rem !important; font-weight: 900 !important; }
 [class*="st-key-fb_del_"] { margin-top: -10px; }
 [class*="st-key-fb_del_"] button { border: none !important; background: transparent !important; padding: 0 4px !important;
   min-height: 0 !important; color: #999 !important; font-size: .75rem !important; }
