@@ -515,11 +515,10 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-hinfo { background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 12px 14px 14px;
             box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 20px 0; }
 .pk-hinfo-t { font-weight: 900; font-size: 1rem; margin-bottom: 8px; color: var(--ink); }
-.pk-hinfo-g { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.pk-hinfo-i { display: flex; align-items: center; gap: 6px; background: #F3F3EF; border-radius: 12px;
-              padding: 7px 8px; color: var(--ink); font-weight: 800; font-size: .8rem; line-height: 1.3; }
-.pk-hinfo-i b { font-size: 1.05rem; }
-.pk-hinfo-i:first-child { background: var(--brand); }
+.pk-hinfo-l { list-style: none; margin: 0; padding: 0; }
+.pk-hinfo-l li { font-weight: 800; font-size: .95rem; line-height: 1.5; padding: 5px 0; border-bottom: 1.5px dashed #ddd; }
+.pk-hinfo-l li:last-child { border-bottom: none; }
+.pk-hinfo-l li:first-child { color: #C45A00; }
 .pk-htheme { position: relative; margin-top: 44px; padding: 12px 14px; border-radius: 16px;
              background: rgba(255,255,255,.07); border: 1.5px solid rgba(254,151,26,.55); }
 .pk-htheme-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 4px; }
@@ -1126,11 +1125,13 @@ def render_line() -> None:
 
 
 # トップの「参加確認」のすぐ下に出す、持ち物などの案内
-HERO_INFO = [("🏓", "パドル無料貸出"), ("👟", "動きやすい服装・運動靴"),
-             ("🧺", "タオル・飲み物"), ("🥤", "自販機あり")]
+HERO_INFO = ["🏓 パドル（ラケット）は無料で貸し出しています",
+             "👟 動きやすい服装・運動靴",
+             "🧺 タオル・飲み物",
+             "🥤 体育館に自動販売機があります"]
 # トップの黒いエリアのすぐ下に出す
-HERO_INFO_HTML = ('<div class="pk-hinfo"><div class="pk-hinfo-t">🎒 練習の日の持ち物・ご案内</div><div class="pk-hinfo-g">'
-                  + "".join(f'<span class="pk-hinfo-i"><b>{i}</b>{t}</span>' for i, t in HERO_INFO) + "</div></div>")
+HERO_INFO_HTML = ('<div class="pk-hinfo"><div class="pk-hinfo-t">🎒 練習の日の持ち物・ご案内</div><ul class="pk-hinfo-l">'
+                  + "".join(f"<li>{t}</li>" for t in HERO_INFO) + "</ul></div>")
 
 
 def hero_theme_html(data: dict) -> str:
