@@ -750,12 +750,15 @@ a.pk-map-btn {
 .pk-gal-cap { font-weight: 800; line-height: 1.6; padding: 0 4px; }
 
 /* ---- お問い合わせ（入力欄まで出して、説明は「詳しく」に） ---- */
-.st-key-contact { background: #fff; border: 3px solid var(--ink); border-radius: 18px; padding: 10px 14px 4px;
-                  margin: 6px 8px 22px 0; }
-.pk-contact-title { font-weight: 900; font-size: 1rem; margin-bottom: 4px; }
+/* LINE オープンチャットの枠と同じ形で、色は赤 */
+.st-key-contact { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #E60012;
+                  padding: 14px 16px 6px; margin: 6px 0 22px; }
+.pk-contact-title { font-weight: 900; font-size: 1.02rem; line-height: 1.45; text-align: center; margin-bottom: 2px; }
+.pk-contact-sub { font-size: .85rem; color: #555; line-height: 1.5; text-align: center; margin-bottom: 8px; }
 .st-key-contact details { border: none !important; }
 .st-key-contact button[kind="primaryFormSubmit"], .st-key-contact [data-testid="stBaseButton-primaryFormSubmit"] {
-  background: #E60012 !important; border-color: #E60012 !important; color: #fff !important; font-weight: 900 !important;
+  background: #E60012 !important; border: 2.5px solid var(--ink) !important; color: #fff !important; font-weight: 900 !important;
+  border-radius: 999px !important; box-shadow: 3px 4px 0 var(--ink) !important; font-size: 1.02rem !important;
 }
 .st-key-contact button[kind="primaryFormSubmit"]:hover { background: #C4000F !important; border-color: #C4000F !important; }
 .st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
@@ -1446,7 +1449,8 @@ def render_contact(data: dict, me: dict | None) -> None:
     タイトルと入力欄はいつも見せて、説明やこれまでのやりとりは「詳しく」で開く。
     書いて送るだけ。主催者のメールアドレスなどは相手に表示されない。"""
     with st.container(key="contact"):
-        md('<div class="pk-contact-title" id="sec-contact">📮 主催者へのお問い合わせ</div>')
+        md('<div class="pk-contact-title" id="sec-contact">📮 主催者へのお問い合わせ</div>'
+           '<div class="pk-contact-sub">質問・ご意見など、ここに書いて送るだけで主催者に届きます。</div>')
         if done := st.session_state.pop("contact_done", None):
             st.success(done)
         with st.form("contact_form", clear_on_submit=True, border=False):
