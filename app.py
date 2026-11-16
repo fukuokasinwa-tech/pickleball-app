@@ -722,6 +722,10 @@ a.pk-map-btn {
                   margin: -6px 8px 22px 0; }
 .pk-contact-title { font-weight: 900; font-size: 1rem; margin-bottom: 4px; }
 .st-key-contact details { border: none !important; }
+.st-key-contact button[kind="primaryFormSubmit"], .st-key-contact [data-testid="stBaseButton-primaryFormSubmit"] {
+  background: #E60012 !important; border-color: #E60012 !important; color: #fff !important; font-weight: 900 !important;
+}
+.st-key-contact button[kind="primaryFormSubmit"]:hover { background: #C4000F !important; border-color: #C4000F !important; }
 .st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
 
 /* ---- LINE オープンチャット ---- */
