@@ -757,6 +757,15 @@ a.pk-map-btn {
   border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 6px;
   box-shadow: 5px 7px 0 0 #FF6FA8, 5px 7px 0 3px var(--ink); margin: 0 8px 24px 0; gap: 8px;
 }
+.st-key-fb_archive { background: #fff; border: 3px dashed #FF6FA8; border-radius: 22px; padding: 12px 10px 4px; margin: 4px 8px 22px 0; }
+.pk-fb-arc-t { font-weight: 900; font-size: 1.05rem; text-align: center; color: #E0457F; }
+.st-key-fb_arc_nav { justify-content: space-between; }
+.st-key-fb_arc_nav > div:nth-child(2) { flex: 1 1 auto !important; }
+.pk-fb-arc-now { text-align: center; font-weight: 900; font-size: 1.05rem; }
+.pk-fb-arc-now span { margin-left: 6px; font-size: .75rem; color: #888; font-weight: 800; }
+.st-key-fb_prev button, .st-key-fb_next button { border: 2px solid var(--ink) !important; border-radius: 999px !important;
+  font-weight: 900 !important; background: #FFE0EE !important; }
+.st-key-fb_archive [class*="st-key-fbcard_"] { margin-right: 0; box-shadow: none; }
 .pk-fb-banner { margin: -4px 8px 18px 0; padding: 14px 16px; border-radius: 22px; text-align: center; color: #fff;
   background: linear-gradient(120deg, #FE971A 0%, #FF6FA8 55%, #A66CFF 100%); border: 3px solid var(--ink);
   box-shadow: 5px 7px 0 0 var(--ink); }
@@ -1680,7 +1689,8 @@ FEEDBACK_RECENT = 3     # 感想カードを出す、終わった練習会の数
 
 def render_feedback(data: dict, me: dict | None) -> None:
     """練習会の感想（直近3回・新しい順）。予定表とは別の場所に出す。"""
-    recent = [e for e in data["events"] if e["date"] < today()][-FEEDBACK_RECENT:][::-1]
+    done = [e for e in data["events"] if e["date"] < today()][::-1]  # 新しい順
+    recent, older = done[:FEEDBACK_RECENT], done[FEEDBACK_RECENT:]
     if not recent:
         return
     md('<div class="pk-h" id="sec-voice">VOICE</div>')
@@ -1688,6 +1698,27 @@ def render_feedback(data: dict, me: dict | None) -> None:
        '<div class="pk-fb-banner-s">練習会、どうでしたか？スタンプをポチッ、ひとことでもうれしいです✨</div></div>')
     for e in recent:
         feedback_card(data, e, me)
+    if older:
+        render_feedback_archive(data, me, older)
+
+
+def render_feedback_archive(data: dict, me: dict | None, older: list[dict]) -> None:
+    """それより前の練習会の感想は、◀ ▶ で1回ずつめくって見る。"""
+    i = min(st.session_state.get("fb_page", 0), len(older) - 1)
+    ev = older[i]
+    d = date.fromisoformat(ev["date"])
+    with st.container(key="fb_archive"):
+        md(f'<div class="pk-fb-arc-t">📚 前の練習会の感想</div>')
+        nav = st.container(horizontal=True, gap="small", wrap=False, vertical_alignment="center", key="fb_arc_nav")
+        if nav.button("◀ 前", key="fb_prev", disabled=i >= len(older) - 1, help="ひとつ前の練習会"):
+            st.session_state["fb_page"] = i + 1
+            st.rerun()
+        nav.markdown(f"<div class='pk-fb-arc-now'>{d.month}/{d.day}（{'月火水木金土日'[d.weekday()]}）"
+                     f"<span>{i + 1}/{len(older)}</span></div>", unsafe_allow_html=True)
+        if nav.button("次 ▶", key="fb_next", disabled=i <= 0, help="ひとつ新しい練習会"):
+            st.session_state["fb_page"] = i - 1
+            st.rerun()
+        feedback_card(data, ev, me)
 
 
 def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
