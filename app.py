@@ -783,6 +783,7 @@ a.pk-map-btn {
 .pk-fb-banner-s { font-size: .85rem; font-weight: 800; margin-top: 4px; }
 .pk-fb-head { display: flex; gap: 12px; align-items: center; }
 .pk-fb-head .cal-chip { margin-left: 6px; }
+.pk-fb-head b { font-weight: 900; font-size: 1.08rem; letter-spacing: .01em; }
 .pk-fb-mem { font-weight: 900; font-size: .85rem; margin-top: 8px; color: #555; }
 .pk-fb-names { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 22px; }
 .pk-fb-name { background: #fff; border: 1.5px solid #FF6FA8; border-radius: 999px; padding: 2px 10px;
@@ -826,6 +827,7 @@ a.pk-line .ln { background: #fff; color: #06C755; border-radius: 8px; padding: 1
 
 /* ---- Instagram へのリンク ---- */
 .pk-insta-row { text-align: center; margin: 14px 0 6px; }
+.pk-insta-bottom { margin: 4px 8px 28px 0; }
 a.pk-insta {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; border-radius: 999px;
   white-space: nowrap; font-size: .95rem; line-height: 1.4;
@@ -1506,7 +1508,6 @@ def render_gallery(data: dict) -> None:
         with st.expander(f"過去の写真・動画（{len(items) - 3}件）"):
             for g in items[3:]:
                 item(g)
-    md(f'<div class="pk-insta-row">{instagram_link("Instagram でもっと見る")}</div>')
 
 
 def pill(data: dict, m: dict, ev: dict, me: dict | None) -> str:
@@ -3185,6 +3186,7 @@ def render_page(data: dict) -> None:
     render_gallery(data)
     render_line()
     render_contact(data, me)
+    md(f'<div class="pk-insta-row pk-insta-bottom">{instagram_link("Instagram でもっと見る")}</div>')  # いちばん下
     render_admin(data, me)
 
 
