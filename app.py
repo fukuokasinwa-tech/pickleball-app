@@ -1207,7 +1207,7 @@ def render_nav(data: dict, me: dict | None = None) -> None:
 
 
 def render_line() -> None:
-    """LINE オープンチャットへの入口（トップのすぐ下に、だれにでも表示）。"""
+    """LINE オープンチャットへの入口（お問い合わせのすぐ上に、だれにでも表示）。"""
     md(f'''<div class="pk-line-box" id="sec-line">
   <div class="pk-line-title">💬 オープンチャット「YAME PICK（ピックルボール）」</div>
   <div class="pk-line-sub">練習会のお知らせや情報交換はこちら。LINEの友だち追加なしで、ニックネームで参加できます。</div>
@@ -3179,11 +3179,11 @@ def render_page(data: dict) -> None:
         render_login()
     render_inquiry_alert(data, me)
     render_replies(data, me)
-    render_line()
     render_news(data)
     live_section(me)
     render_access(data)
     render_gallery(data)
+    render_line()
     render_contact(data, me)
     render_admin(data, me)
 
