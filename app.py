@@ -3196,7 +3196,7 @@ def render_page(data: dict) -> None:
     pull_to_refresh()
     render_hero(data, me)
     if any(e["date"] < today() for e in data["events"]):  # 感想の欄へ飛ぶ目立つボタン
-        md('<a class="pk-voice-jump" href="#sec-voice">🎉 参加された方の感想はこちら <span>▼</span></a>')
+        md('<a class="pk-voice-jump" href="#sec-voice">🎉 参加された方の感想をぜひ教えてください <span>▼</span></a>')
     if not me:  # 使い方は、はじめて名前を登録する人（ログイン前）にだけ見せる
         render_howto(data)
     md(HERO_INFO_HTML)
