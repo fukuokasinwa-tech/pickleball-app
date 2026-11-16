@@ -845,6 +845,7 @@ a.pk-voice-jump span { font-size: .8rem; }
 .pk-line-box { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #06C755;
                padding: 14px 16px 16px; margin: 6px 0 18px; text-align: center; }
 .pk-line-title { font-weight: 900; font-size: 1.02rem; line-height: 1.45; }
+.pk-line-name { white-space: nowrap; }
 .pk-line-sub { font-size: .88rem; color: #333; font-weight: 800; margin: 4px 0 12px; line-height: 1.5; }
 a.pk-line {
   display: flex; align-items: center; justify-content: center; gap: 10px; padding: 11px 16px; border-radius: 999px;
@@ -1240,7 +1241,7 @@ def render_nav(data: dict, me: dict | None = None) -> None:
 def render_line() -> None:
     """LINE オープンチャットへの入口（お問い合わせのすぐ上に、だれにでも表示）。"""
     md(f'''<div class="pk-line-box" id="sec-line">
-  <div class="pk-line-title">💬 オープンチャット「YAME PICK（ピックルボール）」</div>
+  <div class="pk-line-title">💬 オープンチャット<br><span class="pk-line-name">「YAME PICK（ピックルボール）」</span></div>
   <div class="pk-line-sub">練習会のお知らせや情報交換はこちら。LINEの友だち追加なしで、ニックネームで参加できます。</div>
   {line_link("オープンチャットに参加する")}
 </div>''')
