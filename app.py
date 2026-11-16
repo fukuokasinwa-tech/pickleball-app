@@ -584,6 +584,9 @@ a.pk-nav-i { display: flex; align-items: center; justify-content: center; gap: 6
 a.pk-nav-i:active { transform: translate(2px, 3px); box-shadow: 1px 1px 0 var(--ink); }
 a.pk-nav-i span { font-size: 1.05rem; }
 [id^="sec-"] { scroll-margin-top: 16px; }
+.pk-join-tip { background: #FFF1DE; border: 2px dashed var(--brand); border-radius: 14px; padding: 8px 12px;
+  font-size: .88rem; font-weight: 700; line-height: 1.6; margin: -4px 8px 16px 0; }
+.pk-join-tip b { font-weight: 900; }
 .pk-h { display: flex; align-items: center; gap: 14px; font-weight: 900; letter-spacing: .18em; font-size: 1.1rem; margin: 30px 0 16px; }
 .pk-h::after { content: ""; flex: 1; height: 4px; background: var(--ink); border-radius: 2px; }
 
@@ -1667,6 +1670,8 @@ def render_events(data: dict, me: dict | None) -> None:
     upcoming = [e for e in data["events"] if e["date"] >= today()]
     past = [e for e in data["events"] if e["date"] < today()]
     md('<div class="pk-h" id="sec-schedule">SCHEDULE</div>')
+    md('<div class="pk-join-tip">💡 行ける日の<b>「🏓 参加する」</b>を押すと<b>参加予定</b>になります。'
+       '行けなくなったら<b>「✅ 参加予定」</b>をもう一度押すと取り消せます。</div>')
     if not upcoming:
         md('<div class="ev-empty">次の練習会はまだ決まっていません。お楽しみに！</div>')
     for ev in upcoming:
@@ -3147,7 +3152,8 @@ def render_page(data: dict) -> None:
     remember_login(me)
     pull_to_refresh()
     render_hero(data, me)
-    render_howto(data)
+    if not me:  # 使い方は、はじめて名前を登録する人（ログイン前）にだけ見せる
+        render_howto(data)
     md(HERO_INFO_HTML)
     render_nav(data)
     if msg := st.session_state.pop("flash", None):
