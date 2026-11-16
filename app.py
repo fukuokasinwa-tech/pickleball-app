@@ -584,6 +584,12 @@ a.pk-nav-i { display: flex; align-items: center; justify-content: center; gap: 6
 a.pk-nav-i:active { transform: translate(2px, 3px); box-shadow: 1px 1px 0 var(--ink); }
 a.pk-nav-i span { font-size: 1.05rem; }
 [id^="sec-"] { scroll-margin-top: 16px; }
+.pk-howto-pop { display: none; position: relative; background: #fff; border: 3px solid var(--ink); border-radius: 22px;
+  padding: 18px 20px 14px; box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 22px 0;
+  font-weight: 800; }
+.pk-howto-pop:target { display: block; }
+a.pk-howto-close { display: block; text-align: center; margin-top: 10px; padding: 8px; border-radius: 999px;
+  border: 2px solid var(--ink); color: var(--ink) !important; font-weight: 900; text-decoration: none !important; }
 .pk-join-tip { background: #FFF1DE; border: 2px dashed var(--brand); border-radius: 14px; padding: 8px 12px;
   font-size: .88rem; font-weight: 700; line-height: 1.6; margin: -4px 8px 16px 0; }
 .pk-join-tip b { font-weight: 900; }
@@ -1180,15 +1186,23 @@ NAV_ITEMS = [("schedule", "🏓", "参加する"), ("calendar", "📅", "カレ�
              ("news", "📣", "お知らせ"), ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE")]
 
 
-def render_nav(data: dict) -> None:
+def render_nav(data: dict, me: dict | None = None) -> None:
     """トップのすぐ下に、各コーナーへ飛べるボタンを並べる（押すとその場所までスクロール）。
-    お知らせ・ギャラリー・場所は、中身があるときだけ出す。"""
+    お知らせ・ギャラリー・場所は、中身があるときだけ出す。
+    ログイン後は「📖 使い方」も出す（押すとすぐ下に使い方が開く。CSS の :target で表示を切り替える）。"""
     shown = {"news": bool(data["news"]), "voice": any(e["date"] < today() for e in data["events"]),
              "gallery": any(gallery_status(g) == "on" for g in data["gallery"]),
              "access": any(setting(data, k).strip() for k in list(ACCESS_DEFAULT)[:2])}
     links = "".join(f'<a class="pk-nav-i" href="#sec-{k}"><span>{i}</span>{t}</a>'
                     for k, i, t in NAV_ITEMS if shown.get(k, True))
-    md(f'<nav class="pk-nav">{links}</nav>')
+    howto = ""
+    if me:
+        links += '<a class="pk-nav-i" href="#sec-howto"><span>📖</span>使い方</a>'
+        title, steps, note = (setting(data, k) for k in HOWTO_DEFAULT)
+        note = re.sub(r"右上の\s*[×✕xX]\s*でこの案内を閉じられます。?", "", note)  # ここでは下の「閉じる」で閉じる
+        howto = (f'<div class="pk-howto-pop" id="sec-howto">{howto_html(title, steps, note)}'
+                 f'<a class="pk-howto-close" href="#sec-nav">閉じる ✕</a></div>')
+    md(f'<nav class="pk-nav" id="sec-nav">{links}</nav>{howto}')
 
 
 def render_line() -> None:
@@ -3155,7 +3169,7 @@ def render_page(data: dict) -> None:
     if not me:  # 使い方は、はじめて名前を登録する人（ログイン前）にだけ見せる
         render_howto(data)
     md(HERO_INFO_HTML)
-    render_nav(data)
+    render_nav(data, me)
     if msg := st.session_state.pop("flash", None):
         st.toast(msg, icon="🎉")
     if msg := st.session_state.pop("flash_warn", None):
