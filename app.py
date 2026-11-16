@@ -3183,8 +3183,8 @@ def render_page(data: dict) -> None:
     render_news(data)
     live_section(me)
     render_access(data)
-    render_contact(data, me)
     render_gallery(data)
+    render_contact(data, me)
     render_admin(data, me)
 
 
