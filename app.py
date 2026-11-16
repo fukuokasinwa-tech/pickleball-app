@@ -513,6 +513,14 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-title { color: #fff; font-weight: 900; font-size: 2.9rem; line-height: 1.12; margin-top: 10px; }
 .pk-title .y { color: var(--brand); }
 .pk-sub { color: #cfcfcf; margin-top: 14px; font-weight: 700; }
+/* トップの黒いエリアの中のテーマ */
+.pk-htheme { position: relative; margin-top: 44px; padding: 12px 14px; border-radius: 16px;
+             background: rgba(255,255,255,.07); border: 1.5px solid rgba(254,151,26,.55); }
+.pk-htheme-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 4px; }
+.pk-htheme-b { color: #f2f2f2; font-weight: 700; font-size: .92rem; line-height: 1.65; }
+.pk-hmark { color: var(--brand); font-weight: 900; }
+a.pk-hinsta { display: inline-block; margin-top: 8px; color: #fff !important; font-weight: 800; font-size: .85rem;
+              text-decoration: none !important; border-bottom: 1.5px solid var(--brand); }
 .st-key-hero_actions { position: relative; z-index: 1; margin-top: 6px; align-items: center; }
 .pk-count-chip {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
@@ -563,6 +571,14 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-mark { background: linear-gradient(transparent 58%, rgba(254, 151, 26, .55) 58%); padding: 0 1px; white-space: nowrap; }
 
 /* ---- 見出し ---- */
+/* ---- トップのすぐ下の「すぐ移動」ボタン ---- */
+.pk-nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 2px 8px 22px 0; }
+a.pk-nav-i { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 4px; border-radius: 14px;
+             background: #fff; border: 2.5px solid var(--ink); box-shadow: 3px 4px 0 var(--ink); color: var(--ink) !important;
+             font-weight: 900; font-size: .88rem; text-decoration: none !important; white-space: nowrap; }
+a.pk-nav-i:active { transform: translate(2px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+a.pk-nav-i span { font-size: 1.05rem; }
+[id^="sec-"] { scroll-margin-top: 16px; }
 .pk-h { display: flex; align-items: center; gap: 14px; font-weight: 900; letter-spacing: .18em; font-size: 1.1rem; margin: 30px 0 16px; }
 .pk-h::after { content: ""; flex: 1; height: 4px; background: var(--ink); border-radius: 2px; }
 
@@ -910,8 +926,7 @@ def render_hero(data: dict, me: dict | None) -> None:
 <div class="pk-hero-text">
   <div class="pk-kicker">PICKLEBALL COMMUNITY</div>
   <div class="pk-title">YAME <span class="y">PICK</span><br>参加確認</div>
-  <div class="pk-sub">ボタンひとつで、誰が来るかすぐわかる。</div>
-</div>""")
+</div>{hero_theme_html(data)}""")
         if not me:
             return
         with st.container(key="hero_actions", horizontal=True, gap="small"):
@@ -1033,13 +1048,39 @@ def line_link(text: str) -> str:
             f'<span class="ln">LINE</span>{esc(text)}</a>')
 
 
+NAV_ITEMS = [("schedule", "🏓", "参加する"), ("calendar", "📅", "カレンダー"), ("news", "📣", "お知らせ"),
+             ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE")]
+
+
+def render_nav(data: dict) -> None:
+    """トップのすぐ下に、各コーナーへ飛べるボタンを並べる（押すとその場所までスクロール）。
+    お知らせ・ギャラリー・場所は、中身があるときだけ出す。"""
+    shown = {"news": bool(data["news"]),
+             "gallery": any(gallery_status(g) == "on" for g in data["gallery"]),
+             "access": any(setting(data, k).strip() for k in list(ACCESS_DEFAULT)[:2])}
+    links = "".join(f'<a class="pk-nav-i" href="#sec-{k}"><span>{i}</span>{t}</a>'
+                    for k, i, t in NAV_ITEMS if shown.get(k, True))
+    md(f'<nav class="pk-nav">{links}</nav>')
+
+
 def render_line() -> None:
     """LINE オープンチャットへの入口（トップのすぐ下に、だれにでも表示）。"""
-    md(f'''<div class="pk-line-box">
+    md(f'''<div class="pk-line-box" id="sec-line">
   <div class="pk-line-title">💬 オープンチャット「YAME PICK（ピックルボール）」</div>
   <div class="pk-line-sub">練習会のお知らせや情報交換はこちら。LINEの友だち追加なしで、ニックネームで参加できます。</div>
   {line_link("オープンチャットに参加する")}
 </div>''')
+
+
+def hero_theme_html(data: dict) -> str:
+    """トップの黒いエリアに入れるテーマ（管理者メニューの「🎯 テーマ」で書き換えられる）。"""
+    title, body = (setting(data, k).strip() for k in THEME_DEFAULT)
+    if not (title or body):
+        return ""
+    body_html = re.sub(r"「([^」]+)」", r'<span class="pk-hmark">「\1」</span>', esc(body)).replace("\n", "<br>")
+    return (f'<div class="pk-htheme"><div class="pk-htheme-t">{esc(title)}</div>'
+            f'<div class="pk-htheme-b">{body_html}</div>'
+            f'<a class="pk-hinsta" href="{INSTAGRAM_URL}" target="_blank" rel="noopener">📷 @yamepick をフォロー</a></div>')
 
 
 def render_theme(data: dict) -> None:
@@ -1053,7 +1094,7 @@ def render_theme(data: dict) -> None:
 def render_news(data: dict) -> None:
     if not data["news"]:
         return
-    md('<div class="pk-h">NEWS</div>')
+    md('<div class="pk-h" id="sec-news">NEWS</div>')
 
     def card(n: dict) -> str:
         icon, cls = NEWS_CATEGORIES.get(n["category"], NEWS_CATEGORIES["その他"])
@@ -1167,7 +1208,7 @@ def render_access(data: dict) -> None:
     name, address, note = (setting(data, k).strip() for k in ACCESS_DEFAULT)
     if not (name or address):
         return
-    md('<div class="pk-h">ACCESS</div>')
+    md('<div class="pk-h" id="sec-access">ACCESS</div>')
     q = quote(map_query(address or name))
     with st.container(key="access"):
         note_html = f'<div class="pk-acc-note">{esc(note).replace(chr(10), "<br>")}</div>' if note else ""
@@ -1291,7 +1332,7 @@ def render_gallery(data: dict) -> None:
     items = [g for g in data["gallery"] if gallery_status(g) == "on"]
     if not items:
         return
-    md('<div class="pk-h">GALLERY</div>')
+    md('<div class="pk-h" id="sec-gallery">GALLERY</div>')
 
     def item(g: dict) -> None:
         d = date.fromisoformat(g["date"]) if g["date"] else None
@@ -1422,7 +1463,7 @@ def default_calendar_month(data: dict) -> str:
 
 def render_calendar(data: dict, me: dict | None = None) -> None:
     """練習会を月ごとのカレンダーと一覧で見せる。"""
-    md('<div class="pk-h">CALENDAR</div>')
+    md('<div class="pk-h" id="sec-calendar">CALENDAR</div>')
     ym = st.session_state.get("cal_ym") or default_calendar_month(data)
     y, m = map(int, ym.split("-"))
     with st.container(key="cal_nav", horizontal=True, vertical_alignment="center"):
@@ -1487,7 +1528,7 @@ def render_calendar(data: dict, me: dict | None = None) -> None:
 def render_events(data: dict, me: dict | None) -> None:
     upcoming = [e for e in data["events"] if e["date"] >= today()]
     past = [e for e in data["events"] if e["date"] < today()]
-    md('<div class="pk-h">SCHEDULE</div>')
+    md('<div class="pk-h" id="sec-schedule">SCHEDULE</div>')
     if not upcoming:
         md('<div class="ev-empty">次の練習会はまだ決まっていません。お楽しみに！</div>')
     for ev in upcoming:
@@ -2912,6 +2953,7 @@ def render_page(data: dict) -> None:
         me = None
     remember_login(me)
     render_hero(data, me)
+    render_nav(data)
     if msg := st.session_state.pop("flash", None):
         st.toast(msg, icon="🎉")
     if msg := st.session_state.pop("flash_warn", None):
@@ -2923,7 +2965,6 @@ def render_page(data: dict) -> None:
     render_line()
     render_contact(data, me)
     render_howto(data)
-    render_theme(data)
     render_news(data)
     render_calendar(data, me)
     render_events(data, me)
