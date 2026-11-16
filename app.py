@@ -450,7 +450,7 @@ def notify_attendance(data: dict, ev: dict, member_id: str, joined: bool, count:
 
 
 def set_status(event_id: str, member_id: str, status: str | None, by: str = "本人") -> str:
-    """出欠を登録。status=None で未回答に戻す。'ok' / 'full' を返す。参加者が増減したらメールで知らせる。"""
+    """出欠を登録。status=None で未回答に戻す。'ok' / 'full' を返す。参加者が増えたらメールで知らせる。"""
     data = _fresh_data()
     ev = find(data["events"], event_id)
     if ev is None:
@@ -461,8 +461,8 @@ def set_status(event_id: str, member_id: str, status: str | None, by: str = "本
             return "full"
     row = next((a for a in data["attendance"] if a["event_id"] == event_id and a["member_id"] == member_id), None)
     was, will = bool(row and row["status"] == "attending"), status == "attending"
-    if was != will:
-        notify_attendance(data, ev, member_id, will, len(others) + will, by)
+    if will and not was:  # メールで知らせるのは参加が増えたときだけ（取り消しは知らせない）
+        notify_attendance(data, ev, member_id, True, len(others) + 1, by)
     stamp = now().isoformat(timespec="seconds")
     if status is None:
         if row:
@@ -717,10 +717,12 @@ a.pk-map-btn {
 [class*="st-key-gal_"] iframe { border-radius: 12px; }
 .pk-gal-cap { font-weight: 800; line-height: 1.6; padding: 0 4px; }
 
-/* ---- お問い合わせ（たたんだ状態で小さく） ---- */
-.st-key-contact { margin: -6px 8px 22px 0; }
-.st-key-contact details { background: #fff; border: 3px solid var(--ink) !important; border-radius: 16px !important; }
-.st-key-contact summary { padding: 6px 14px !important; font-weight: 900; }
+/* ---- お問い合わせ（入力欄まで出して、説明は「詳しく」に） ---- */
+.st-key-contact { background: #fff; border: 3px solid var(--ink); border-radius: 18px; padding: 10px 14px 4px;
+                  margin: -6px 8px 22px 0; }
+.pk-contact-title { font-weight: 900; font-size: 1rem; margin-bottom: 4px; }
+.st-key-contact details { border: none !important; }
+.st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
 
 /* ---- LINE オープンチャット ---- */
 .pk-line-box { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #06C755;
@@ -1187,46 +1189,46 @@ def render_replies(data: dict, me: dict | None) -> None:
 
 
 def render_contact(data: dict, me: dict | None) -> None:
-    """主催者へのお問い合わせ欄（LINE オープンチャットのすぐ下に、たたんだ状態で小さく出す）。
+    """主催者へのお問い合わせ欄（LINE オープンチャットのすぐ下）。
+    タイトルと入力欄はいつも見せて、説明やこれまでのやりとりは「詳しく」で開く。
     書いて送るだけ。主催者のメールアドレスなどは相手に表示されない。"""
     with st.container(key="contact"):
+        md('<div class="pk-contact-title">📮 主催者へのお問い合わせ</div>')
         if done := st.session_state.pop("contact_done", None):
             st.success(done)
+        with st.form("contact_form", clear_on_submit=True, border=False):
+            name = me["name"] if me else st.text_input(
+                "お名前（ニックネーム・空欄でもOK）", max_chars=20, label_visibility="collapsed",
+                placeholder="お名前（ニックネーム・空欄でもOK）")
+            body = st.text_area("お問い合わせ内容", max_chars=CONTACT_MAX, height=68, label_visibility="collapsed",
+                                placeholder="質問・ご意見など、なんでも気軽にどうぞ")
+            sent = st.form_submit_button("📨 送る", type="primary", width="stretch")
+        if sent:
+            text = body.strip()
+            last = st.session_state.get("contact_last", 0.0)
+            if not text:
+                st.warning("お問い合わせ内容を入力してください。")
+            elif time.time() - last < 30:
+                st.warning("少し時間をおいてから、もう一度送ってください。")
+            else:
+                who = (name or "").strip() or "（名前なし）"
+                stamp = now()
+                _append("inquiries", {"id": new_id(), "created_at": stamp.isoformat(timespec="seconds"),
+                                      "member_id": me["id"] if me else "", "name": who, "body": text, "done": ""})
+                threading.Thread(target=_send_mail, daemon=True, args=(
+                    f"【やめピック】お問い合わせ：{who} さん",
+                    f"アプリのお問い合わせ欄から届きました。\n\nお名前：{who}"
+                    f"{'（アプリ登録メンバー）' if me else '（ログインしていない方）'}\n"
+                    f"日時：{stamp:%Y/%m/%d %H:%M}\n\n{text}\n")).start()
+                st.session_state["contact_last"] = time.time()
+                st.session_state["contact_done"] = "送りました！ありがとうございます 🙏"
+                st.rerun()
         mine = my_inquiries(data, me) if me else []
-        label = "📮 主催者へのお問い合わせ" + (f"（これまで {len(mine)} 件）" if mine else "")
-        with st.expander(label, key="contact_open"):
-            st.caption("質問・ご意見・「今日少し遅れます」など、なんでも気軽にどうぞ。書いて送るだけで主催者に届きます。"
-                       + ("返事はこのアプリに届きます（次にアプリを開いたとき、いちばん上に出ます）。" if me
-                          else "ログインしてから送ると、返事がこのアプリに届きます。"))
-            with st.form("contact_form", clear_on_submit=True, border=False):
-                if me:
-                    st.caption(f"お名前：**{me['name']}** さんとして送ります")
-                    name = me["name"]
-                else:
-                    name = st.text_input("お名前（ニックネームでもOK・空欄でもOK）", max_chars=20)
-                body = st.text_area("お問い合わせ内容", max_chars=CONTACT_MAX, height=120,
-                                    placeholder="例：初めてでも参加できますか？／駐車場はありますか？")
-                sent = st.form_submit_button("📨 送る", type="primary", width="stretch")
-            if sent:
-                text = body.strip()
-                last = st.session_state.get("contact_last", 0.0)
-                if not text:
-                    st.warning("お問い合わせ内容を入力してください。")
-                elif time.time() - last < 30:
-                    st.warning("少し時間をおいてから、もう一度送ってください。")
-                else:
-                    who = (name or "").strip() or "（名前なし）"
-                    stamp = now()
-                    _append("inquiries", {"id": new_id(), "created_at": stamp.isoformat(timespec="seconds"),
-                                          "member_id": me["id"] if me else "", "name": who, "body": text, "done": ""})
-                    threading.Thread(target=_send_mail, daemon=True, args=(
-                        f"【やめピック】お問い合わせ：{who} さん",
-                        f"アプリのお問い合わせ欄から届きました。\n\nお名前：{who}"
-                        f"{'（アプリ登録メンバー）' if me else '（ログインしていない方）'}\n"
-                        f"日時：{stamp:%Y/%m/%d %H:%M}\n\n{text}\n")).start()
-                    st.session_state["contact_last"] = time.time()
-                    st.session_state["contact_done"] = "送りました！ありがとうございます 🙏"
-                    st.rerun()
+        with st.expander("詳しく" + (f"（これまでのやりとり {len(mine)} 件）" if mine else ""), key="contact_more"):
+            st.caption("質問・ご意見・「今日少し遅れます」など、なんでも気軽にどうぞ。"
+                       "メールアドレスなどは不要で、書いて送るだけで主催者に届きます。"
+                       + (f"{me['name']} さんとして送られ、返事はこのアプリに届きます（次にアプリを開いたとき、いちばん上に出ます）。"
+                          if me else "ログインしてから送ると、返事がこのアプリに届きます。"))
             if mine:
                 md("**📬 これまでのお問い合わせと返信**")
                 for q in mine:
