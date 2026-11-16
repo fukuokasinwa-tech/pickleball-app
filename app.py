@@ -752,11 +752,17 @@ a.pk-map-btn {
 .st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
 
 /* ---- 練習会の感想 ---- */
-[class*="st-key-fbcard_"] {  /* 終わった練習会のすぐ下にくっつけて出す */
-  background: #fff; border: 2px dashed #bbb; border-radius: 14px; padding: 8px 10px 2px;
-  margin: -14px 8px 14px 0; gap: 6px;
+[class*="st-key-fbcard_"] {  /* 終わった練習会＝感想を書くカード */
+  background: #fff; border: 2.5px solid var(--ink); border-radius: 14px; padding: 10px 12px 4px;
+  margin: 0 8px 12px 0; gap: 8px;
 }
-[class*="st-key-fbx_"] summary { padding: 4px 8px !important; font-size: .85rem; }
+.pk-fb-head { display: flex; gap: 12px; align-items: center; }
+.pk-fb-head .cal-chip { margin-left: 6px; }
+.pk-fb-mem { font-weight: 900; font-size: .85rem; margin-top: 8px; color: #555; }
+.pk-fb-names { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 22px; }
+.pk-fb-name { background: #FFF1DE; border: 1.5px solid var(--brand); border-radius: 999px; padding: 2px 10px;
+              font-weight: 800; font-size: .82rem; }
+.pk-fb-none { color: #999; font-size: .82rem; }
 [class*="st-key-fbrow_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
 [class*="st-key-fb_st_"] button { white-space: pre-line !important; line-height: 1.25 !important; padding: 6px 2px !important;
   border-radius: 14px !important; font-weight: 800 !important; font-size: .78rem !important; min-height: 58px;
@@ -1569,27 +1575,31 @@ def render_calendar(data: dict, me: dict | None = None) -> None:
     md(f'<div class="cal-grid">{head}{"".join(cells)}</div>')
 
     # カレンダーの下に、その月の練習会を一覧で
-    if not month_events:
+    # 終わった練習会は、直近の3回だけを感想を書くカードとして出す。
+    # 今月を表示しているときは、前の月の分も含めて直近3回を一覧の先頭に出す
+    recent_done = [e for e in data["events"] if e["date"] < t][-FEEDBACK_RECENT:]
+    this_month = t[:7] == f"{y}-{m:02d}"
+    shown = [e for e in recent_done if this_month or e["date"].startswith(f"{y}-{m:02d}")]
+    for e in shown:
+        feedback_card(data, e, me)
+    if not shown and not [e for e in month_events if e["date"] >= t]:
         md('<div class="ev-empty">この月の練習会はまだありません。</div>')
-        return
     for e in month_events:
+        if e["date"] < t:
+            continue
         d = date.fromisoformat(e["date"])
         n = len(event_rows(data, e["id"], "attending"))
         cap = e["capacity"]
-        if e["date"] < t:
-            chip = '<span class="cal-chip end">終了</span>'
-        elif cap and n >= cap:
+        if cap and n >= cap:
             chip = '<span class="cal-chip full">満員</span>'
         else:
             chip = f'<span class="cal-chip">残り{cap - n}席</span>' if cap else ""
         place = f'　📍{esc(e["place"])}' if e.get("place") else ""
-        md(f"""<div class="cal-list"><div class="cal-row{" past" if e["date"] < t else ""}">
+        md(f"""<div class="cal-list"><div class="cal-row">
   <div class="cal-row-date">{d.month}/{d.day}<span>（{"月火水木金土日"[d.weekday()]}）</span></div>
   <div class="cal-row-body"><b>{esc(e["title"])}</b>{chip}<br>
   <span class="cal-row-sub">🕘 {esc(e["time"])}{place}　<span class="nw">👥 {n}/{cap}人</span></span></div>
 </div></div>""")
-        if e["date"] < t:  # 終わった練習会の下に、感想（スタンプ＋ひとこと）
-            feedback_card(data, e, me)
 
 
 def render_events(data: dict, me: dict | None) -> None:
@@ -1614,6 +1624,7 @@ def render_events(data: dict, me: dict | None) -> None:
 
 FEEDBACK_STAMPS = [("fun", "😆", "楽しい"), ("sweat", "💪", "いい汗"), ("up", "🏓", "上達"), ("tired", "😅", "疲れた")]
 FEEDBACK_MAX = 100      # ひとことの最大文字数
+FEEDBACK_RECENT = 3     # 感想カードを出す、終わった練習会の数（新しい順）
 
 
 def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
@@ -1621,7 +1632,14 @@ def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
     members = {m["id"]: m for m in data["members"]}
     is_admin = bool(me and me["id"] in admin_member_ids(data)) or st.session_state.get("is_admin")
     eid = ev["id"]
+    d = date.fromisoformat(ev["date"])
+    names = [members[a["member_id"]]["name"] for a in event_rows(data, eid, "attending") if a["member_id"] in members]
     with st.container(key=f"fbcard_{eid}"):
+        # 終わった練習会は、時間・場所・人数は出さずに「参加したメンバー」を出す
+        chips = "".join(f'<span class="pk-fb-name">{esc(n)}</span>' for n in names) or '<span class="pk-fb-none">記録なし</span>'
+        md(f"""<div class="pk-fb-head"><div class="cal-row-date">{d.month}/{d.day}<span>（{"月火水木金土日"[d.weekday()]}）</span></div>
+<div><b>{esc(ev["title"])}</b><span class="cal-chip end">終了</span></div></div>
+<div class="pk-fb-mem">👥 参加したメンバー（{len(names)}人）</div><div class="pk-fb-names">{chips}</div>""")
         stamps = [f for f in rows if f["kind"] == "stamp"]
         mine = next((f for f in stamps if me and f["member_id"] == me["id"]), None)
         row = st.container(horizontal=True, gap="small", wrap=False, key=f"fbrow_{eid}")  # スマホでも横に並べる
@@ -1640,10 +1658,7 @@ def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
                                          "value": code, "created_at": now().isoformat(timespec="seconds")})
                 st.rerun()
         comments = sorted((f for f in rows if f["kind"] == "comment"), key=lambda f: f["created_at"])
-        box = st.expander(f"💬 ひとこと感想（{len(comments)}件）" if comments else "💬 ひとこと感想を書く",
-                          key=f"fbx_{eid}")
-        with box:
-            feedback_comments(data, ev, me, comments, members, is_admin)
+        feedback_comments(data, ev, me, comments, members, is_admin)
 
 
 def feedback_comments(data: dict, ev: dict, me: dict | None, comments: list[dict], members: dict, is_admin: bool) -> None:
