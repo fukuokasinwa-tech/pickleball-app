@@ -540,7 +540,7 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-q { background: #F3F3EF; border-radius: 14px; padding: 8px 12px; margin: 8px 0 4px; font-weight: 700; }
 .pk-reply { background: #FFF1DE; border: 2px solid var(--brand); border-radius: 14px; padding: 8px 12px; margin: 4px 0 10px 18px; font-weight: 700; }
 .pk-reply.wait { background: #fafafa; border-color: #ddd; color: #888; }
-.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-replies {
+.pk-card, .st-key-howto, .st-key-theme, .st-key-login, .st-key-replies, .st-key-inq_alert {
   background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 16px 20px;
   box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink);
   margin: 0 8px 26px 0; color: var(--ink); font-weight: 800;
@@ -727,6 +727,9 @@ a.pk-map-btn {
 }
 .st-key-contact button[kind="primaryFormSubmit"]:hover { background: #C4000F !important; border-color: #C4000F !important; }
 .st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
+
+/* ---- 管理者向け：未対応のお問い合わせ ---- */
+.st-key-inq_alert { border-color: #E60012 !important; box-shadow: 5px 7px 0 0 #E60012, 5px 7px 0 3px var(--ink) !important; }
 
 /* ---- LINE オープンチャット ---- */
 .pk-line-box { background: #fff; border: 3px solid var(--ink); border-radius: 22px; box-shadow: 6px 7px 0 #06C755;
@@ -1173,6 +1176,31 @@ def inquiry_html(q: dict) -> str:
              else "<div class='pk-reply wait'>⏳ お返事をお待ちください</div>")
     return (f"<div class='pk-q'><span style='color:#888'>{when} あなた</span><br>"
             f"{esc(q['body']).replace(chr(10), '<br>')}</div>{reply}")
+
+
+def render_inquiry_alert(data: dict, me: dict | None) -> None:
+    """未対応のお問い合わせがあるとき、管理者にだけトップに知らせる（対応済みにすると消える）。"""
+    is_admin = bool(me and me["id"] in admin_member_ids(data)) or st.session_state.get("is_admin")
+    if not is_admin:
+        return
+    todo = sorted((q for q in data["inquiries"] if not q["done"]), key=lambda q: q["created_at"], reverse=True)
+    if not todo:
+        return
+    with st.container(key="inq_alert"):
+        md(f'<div class="pk-howto-title">📮 未対応のお問い合わせが {len(todo)} 件あります</div>')
+        st.caption("管理者にだけ表示しています。返信するか「対応済み」にすると消えます。"
+                   "返信は、下の管理者メニュー「📮 問い合わせ」からできます。")
+        for q in todo:
+            try:
+                when = f"{datetime.fromisoformat(q['created_at']):%m/%d %H:%M}"
+            except ValueError:
+                when = ""
+            body = q["body"] if len(q["body"]) <= 80 else q["body"][:80] + "…"
+            md(f"<div class='pk-q'><b>{esc(q['name'])}</b> <span style='color:#888'>{when}</span><br>"
+               f"{esc(body).replace(chr(10), '<br>')}</div>")
+            if st.button("✅ 対応済みにする", key=f"inq_alert_done_{q['id']}", width="stretch"):
+                _update("inquiries", q["id"], {"done": "1"})
+                st.rerun()
 
 
 def render_replies(data: dict, me: dict | None) -> None:
@@ -2808,6 +2836,7 @@ def render_page(data: dict) -> None:
         st.toast(msg, icon="⚠️")
     if not me:
         render_login()
+    render_inquiry_alert(data, me)
     render_replies(data, me)
     render_line()
     render_contact(data, me)
