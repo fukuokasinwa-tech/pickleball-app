@@ -809,6 +809,21 @@ a.pk-map-btn {
 [class*="st-key-fb_del_"] { margin-top: -10px; }
 [class*="st-key-fb_del_"] button { border: none !important; background: transparent !important; padding: 0 4px !important;
   min-height: 0 !important; color: #999 !important; font-size: .75rem !important; }
+[class*="st-key-fbcard_"] [data-testid="stTextInputRootElement"],
+.st-key-contact [data-testid="stTextAreaRootElement"],
+.st-key-contact [data-testid="stTextInputRootElement"] {
+  border: 2.5px solid var(--ink) !important; border-radius: 14px !important; background: #fff !important;
+  overflow: hidden;
+}
+.st-key-contact textarea { border-radius: 12px !important; }
+[class*="st-key-fbcard_"] [data-testid="stTextInput"] input, .st-key-contact textarea, .st-key-contact input {
+  background: #fff !important; font-weight: 700; }
+/* 感想のカードの文字は全体に太く */
+[class*="st-key-fbcard_"], [class*="st-key-fbcard_"] p, [class*="st-key-fbcard_"] input,
+[class*="st-key-fbcard_"] button, .st-key-fb_archive { font-weight: 900 !important; }
+[class*="st-key-fbcard_"] .cal-chip.end { font-weight: 900; color: #555; border-color: #888; }
+[class*="st-key-fbcard_"] .pk-fb-mem { color: #333; }
+[class*="st-key-fbcard_"] input::placeholder { font-weight: 800; }
 .pk-fb { background: #fff; border: 2px solid #FFC2DA; border-radius: 16px 16px 16px 4px; padding: 6px 12px; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
 .pk-fb b { color: #E0457F; }
 
@@ -1762,18 +1777,17 @@ def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
 <div><b>{esc(ev["title"])}</b><span class="cal-chip end">終了</span></div></div>
 <div class="pk-fb-mem">👥 参加したメンバー（{len(names)}人）</div><div class="pk-fb-names">{chips}</div>""")
         stamps = [f for f in rows if f["kind"] == "stamp"]
-        mine = next((f for f in stamps if me and f["member_id"] == me["id"]), None)
+        # スタンプは1人でいくつでも押せる（同じスタンプをもう一度押すと取り消し）
+        mine = {f["value"]: f for f in stamps if me and f["member_id"] == me["id"]}
         row = st.container(horizontal=True, gap="small", wrap=False, key=f"fbrow_{eid}")  # スマホでも横に並べる
         for code, emoji, label in FEEDBACK_STAMPS:
             col = row
             n = sum(f["value"] == code for f in stamps)
-            chosen = bool(mine and mine["value"] == code)
+            chosen = code in mine
             if col.button(f"{emoji} {label}{f' {n}' if n else ''}", key=f"fb_st_{eid}_{code}", width="stretch",
                           type="primary" if chosen else "secondary", disabled=me is None):
-                if chosen:  # もう一度押すと取り消し
-                    _delete("feedback", {mine["id"]})
-                elif mine:
-                    _update("feedback", mine["id"], {"value": code, "created_at": now().isoformat(timespec="seconds")})
+                if chosen:
+                    _delete("feedback", {mine[code]["id"]})
                 else:
                     _append("feedback", {"id": new_id(), "event_id": eid, "member_id": me["id"], "kind": "stamp",
                                          "value": code, "created_at": now().isoformat(timespec="seconds")})
