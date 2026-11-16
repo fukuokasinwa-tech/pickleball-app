@@ -1478,13 +1478,12 @@ def render_admin(data: dict, me: dict | None) -> None:
     if not can_see_admin(data, me):
         return
     md('<div class="pk-h">ADMIN</div>')
-    # 👑 管理者にした人がログインしているときは、パスワードなしで管理者メニューを開いた状態にする
+    # 👑 管理者にした人がログインしているときは、パスワードなしで管理者メニューを使える（メニューは最初は閉じておく）
     # （「管理者ログアウト」を押したあとは、その画面を開いている間は自動では入らない）
     is_admin_member = bool(me and me["id"] in admin_member_ids(data))
     if is_admin_member and not st.session_state.get("auto_admin_done"):
         st.session_state["auto_admin_done"] = True
         st.session_state["is_admin"] = True
-        st.session_state["admin_menu"] = True  # 管理者メニューを開く
     # key を付けて、上の欄が増えたり減ったりしても開いた状態を保つ
     with st.expander("🔧 管理者メニュー", key="admin_menu", on_change="rerun"):
         if not admin_member_ids(data):
@@ -2635,9 +2634,22 @@ def admin_members(data: dict) -> None:
             st.session_state["flash"] = f"{m['name']} さんの数字をリセットしました。次のログインで新しい数字を設定できます。"
             st.rerun()
         if c3.button("🗑", key=f"adm_memdel_{m['id']}"):
-            _delete("attendance", {m["id"]}, col="member_id")
-            _delete("members", {m["id"]})
+            st.session_state["confirm_member_del"] = m["id"]
             st.rerun()
+        if st.session_state.get("confirm_member_del") == m["id"]:
+            fam_n = len(family_of(data, m["id"]))
+            extra = f"（家族として登録した {fam_n} 人は残ります）" if fam_n else ""
+            st.warning(f"⚠️ **{m['name']}** さんを削除しますか？ 出欠の記録も消えて、元に戻せません。{extra}")
+            d1, d2 = st.columns(2)
+            if d1.button("削除する", type="primary", key=f"adm_memdel_ok_{m['id']}", width="stretch"):
+                _delete("attendance", {m["id"]}, col="member_id")
+                _delete("members", {m["id"]})
+                st.session_state.pop("confirm_member_del", None)
+                st.session_state["flash"] = f"{m['name']} さんを削除しました。"
+                st.rerun()
+            if d2.button("やめる", key=f"adm_memdel_ng_{m['id']}", width="stretch"):
+                st.session_state.pop("confirm_member_del", None)
+                st.rerun()
 
 
 def admin_csv(data: dict) -> None:
