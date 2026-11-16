@@ -778,8 +778,6 @@ a.pk-map-btn {
 .pk-fb-names { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 22px; }
 .pk-fb-name { background: #fff; border: 1.5px solid #FF6FA8; border-radius: 999px; padding: 2px 10px;
               font-weight: 800; font-size: .82rem; }
-.pk-fb-name b { margin-left: 4px; font-size: 1rem; }
-.pk-fb-name.st { background: linear-gradient(135deg, #FFF3B0, #FFE0EE); border-color: #E0457F; }
 .pk-fb-none { color: #999; font-size: .82rem; }
 [class*="st-key-fbrow_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
 [class*="st-key-fb_st_"] button { white-space: pre-line !important; line-height: 1.25 !important; padding: 6px 2px !important;
@@ -1687,11 +1685,11 @@ def render_events(data: dict, me: dict | None) -> None:
 
 FEEDBACK_STAMPS = [("fun", "😆", "楽しい"), ("sweat", "💪", "いい汗"), ("up", "🏓", "上達"), ("again", "🙋", "また参加したい")]
 FEEDBACK_MAX = 100      # ひとことの最大文字数
-FEEDBACK_RECENT = 3     # 感想カードを出す、終わった練習会の数（新しい順）
+FEEDBACK_RECENT = 2     # 感想カードを出す、終わった練習会の数（新しい順）
 
 
 def render_feedback(data: dict, me: dict | None) -> None:
-    """練習会の感想（直近3回・新しい順）。予定表とは別の場所に出す。"""
+    """練習会の感想（直近2回・新しい順）。予定表とは別の場所に出す。"""
     done = [e for e in data["events"] if e["date"] < today()][::-1]  # 新しい順
     recent, older = done[:FEEDBACK_RECENT], done[FEEDBACK_RECENT:]
     if not recent:
@@ -1733,17 +1731,10 @@ def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
     is_admin = bool(me and me["id"] in admin_member_ids(data)) or st.session_state.get("is_admin")
     eid = ev["id"]
     d = date.fromisoformat(ev["date"])
-    ids = [a["member_id"] for a in event_rows(data, eid, "attending") if a["member_id"] in members]
-    names = [members[i]["name"] for i in ids]
-    # 押したスタンプは、その人の名前の横に残す（参加の記録がない人がスタンプを押したときも名前を足す）
-    emoji_of = {c: e for c, e, _ in FEEDBACK_STAMPS}
-    stamp_by = {f["member_id"]: emoji_of.get(f["value"], "") for f in rows if f["kind"] == "stamp"}
-    ids += [i for i in stamp_by if i not in ids and i in members]
+    names = [members[a["member_id"]]["name"] for a in event_rows(data, eid, "attending") if a["member_id"] in members]
     with st.container(key=f"fbcard_{eid}"):
         # 終わった練習会は、時間・場所・人数は出さずに「参加したメンバー」を出す
-        chips = "".join(f'<span class="pk-fb-name{" st" if stamp_by.get(i) else ""}">{esc(members[i]["name"])}'
-                        f'{f"<b>{stamp_by[i]}</b>" if stamp_by.get(i) else ""}</span>' for i in ids) \
-            or '<span class="pk-fb-none">記録なし</span>'
+        chips = "".join(f'<span class="pk-fb-name">{esc(n)}</span>' for n in names) or '<span class="pk-fb-none">記録なし</span>'
         md(f"""<div class="pk-fb-head"><div class="cal-row-date">{d.month}/{d.day}<span>（{"月火水木金土日"[d.weekday()]}）</span></div>
 <div><b>{esc(ev["title"])}</b><span class="cal-chip end">終了</span></div></div>
 <div class="pk-fb-mem">👥 参加したメンバー（{len(names)}人）</div><div class="pk-fb-names">{chips}</div>""")
