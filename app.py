@@ -512,14 +512,15 @@ header[data-testid="stHeader"], #MainMenu, footer { display: none !important; }
 .pk-title .y { color: var(--brand); }
 .pk-sub { color: #cfcfcf; margin-top: 14px; font-weight: 700; }
 /* トップの黒いエリアの中のテーマ */
-.pk-hinfo { position: relative; margin-top: 44px; }
-.pk-hinfo-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 6px; }
+.pk-hinfo { background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 12px 14px 14px;
+            box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 20px 0; }
+.pk-hinfo-t { font-weight: 900; font-size: 1rem; margin-bottom: 8px; color: var(--ink); }
 .pk-hinfo-g { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.pk-hinfo-i { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.08); border-radius: 12px;
-              padding: 6px 8px; color: #fff; font-weight: 800; font-size: .8rem; line-height: 1.3; }
+.pk-hinfo-i { display: flex; align-items: center; gap: 6px; background: #F3F3EF; border-radius: 12px;
+              padding: 7px 8px; color: var(--ink); font-weight: 800; font-size: .8rem; line-height: 1.3; }
 .pk-hinfo-i b { font-size: 1.05rem; }
-.pk-hinfo-i:first-child { background: var(--brand); color: var(--ink); }
-.pk-htheme { position: relative; margin-top: 12px; padding: 12px 14px; border-radius: 16px;
+.pk-hinfo-i:first-child { background: var(--brand); }
+.pk-htheme { position: relative; margin-top: 44px; padding: 12px 14px; border-radius: 16px;
              background: rgba(255,255,255,.07); border: 1.5px solid rgba(254,151,26,.55); }
 .pk-htheme-t { color: var(--brand); font-weight: 900; font-size: .95rem; margin-bottom: 4px; }
 .pk-htheme-b { color: #f2f2f2; font-weight: 700; font-size: .92rem; line-height: 1.65; }
@@ -978,7 +979,7 @@ def render_hero(data: dict, me: dict | None) -> None:
 <div class="pk-hero-text">
   <div class="pk-kicker">PICKLEBALL COMMUNITY</div>
   <div class="pk-title">YAME <span class="y">PICK</span><br>参加確認</div>
-</div>{HERO_INFO_HTML}{hero_theme_html(data)}""")
+</div>{hero_theme_html(data)}""")
         if not me:
             return
         with st.container(key="hero_actions", horizontal=True, gap="small"):
@@ -1125,8 +1126,9 @@ def render_line() -> None:
 
 
 # トップの「参加確認」のすぐ下に出す、持ち物などの案内
-HERO_INFO = [("🏓", "パドル（ラケット）無料貸出"), ("👟", "動きやすい服装・運動靴"),
-             ("🧺", "タオル・飲み物"), ("🥤", "体育館に自販機あり")]
+HERO_INFO = [("🏓", "パドル無料貸出"), ("👟", "動きやすい服装・運動靴"),
+             ("🧺", "タオル・飲み物"), ("🥤", "自販機あり")]
+# トップの黒いエリアのすぐ下に出す
 HERO_INFO_HTML = ('<div class="pk-hinfo"><div class="pk-hinfo-t">🎒 練習の日の持ち物・ご案内</div><div class="pk-hinfo-g">'
                   + "".join(f'<span class="pk-hinfo-i"><b>{i}</b>{t}</span>' for i, t in HERO_INFO) + "</div></div>")
 
@@ -3018,6 +3020,7 @@ def render_page(data: dict) -> None:
     remember_login(me)
     pull_to_refresh()
     render_hero(data, me)
+    md(HERO_INFO_HTML)
     render_nav(data)
     if msg := st.session_state.pop("flash", None):
         st.toast(msg, icon="🎉")
