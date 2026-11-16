@@ -782,8 +782,8 @@ a.pk-map-btn {
 .pk-fb-banner { margin: -4px 8px 18px 0; padding: 14px 16px; border-radius: 22px; text-align: center; color: #fff;
   background: linear-gradient(120deg, #FE971A 0%, #FF6FA8 55%, #A66CFF 100%); border: 3px solid var(--ink);
   box-shadow: 5px 7px 0 0 var(--ink); }
-.pk-fb-banner-t { font-size: 1.3rem; font-weight: 900; letter-spacing: .04em; text-shadow: 0 2px 0 rgba(0,0,0,.18); }
-.pk-fb-banner-s { font-size: .85rem; font-weight: 800; margin-top: 4px; }
+.pk-fb-banner-t { font-size: 1.45rem; font-weight: 900; letter-spacing: .04em; text-shadow: 0 2px 0 rgba(0,0,0,.18); }
+.pk-fb-banner-s { font-size: .9rem; font-weight: 900; margin-top: 4px; text-shadow: 0 1px 0 rgba(0,0,0,.15); }
 .pk-fb-head { display: flex; gap: 12px; align-items: center; }
 .pk-fb-head .cal-chip { margin-left: 6px; }
 .pk-fb-head b { font-weight: 900; font-size: 1.08rem; letter-spacing: .01em; }
@@ -824,7 +824,7 @@ a.pk-map-btn {
 [class*="st-key-fbcard_"] .cal-chip.end { font-weight: 900; color: #555; border-color: #888; }
 [class*="st-key-fbcard_"] .pk-fb-mem { color: #333; }
 [class*="st-key-fbcard_"] input::placeholder { font-weight: 800; }
-.pk-fb { background: #fff; border: 2px solid #FFC2DA; border-radius: 16px 16px 16px 4px; padding: 6px 12px; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
+.pk-fb { background: #fff; border: 2px solid #FFC2DA; font-weight: 900 !important; border-radius: 16px 16px 16px 4px; padding: 6px 12px; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
 .pk-fb b { color: #E0457F; }
 
 /* ---- 管理者向け：未対応のお問い合わせ ---- */
