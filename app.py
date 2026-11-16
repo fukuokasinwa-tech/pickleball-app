@@ -3147,6 +3147,7 @@ def render_page(data: dict) -> None:
     remember_login(me)
     pull_to_refresh()
     render_hero(data, me)
+    render_howto(data)
     md(HERO_INFO_HTML)
     render_nav(data)
     if msg := st.session_state.pop("flash", None):
@@ -3159,7 +3160,6 @@ def render_page(data: dict) -> None:
     render_replies(data, me)
     render_line()
     render_contact(data, me)
-    render_howto(data)
     render_news(data)
     live_section(me)
     render_access(data)
