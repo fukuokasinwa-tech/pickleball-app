@@ -751,7 +751,7 @@ a.pk-map-btn {
 
 /* ---- お問い合わせ（入力欄まで出して、説明は「詳しく」に） ---- */
 .st-key-contact { background: #fff; border: 3px solid var(--ink); border-radius: 18px; padding: 10px 14px 4px;
-                  margin: -6px 8px 22px 0; }
+                  margin: 6px 8px 22px 0; }
 .pk-contact-title { font-weight: 900; font-size: 1rem; margin-bottom: 4px; }
 .st-key-contact details { border: none !important; }
 .st-key-contact button[kind="primaryFormSubmit"], .st-key-contact [data-testid="stBaseButton-primaryFormSubmit"] {
@@ -766,7 +766,7 @@ a.pk-map-btn {
   border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 6px;
   box-shadow: 5px 7px 0 0 #FF6FA8, 5px 7px 0 3px var(--ink); margin: 0 8px 24px 0; gap: 8px;
 }
-.st-key-fb_archive { background: #fff; border: 3px dashed #FF6FA8; border-radius: 22px; padding: 8px 10px; margin: 4px 8px 22px 0; }
+.st-key-fb_archive { background: #fff; border: 3px solid #FF6FA8; border-radius: 22px; padding: 8px 10px; margin: 4px 8px 22px 0; }
 .st-key-fb_arc_nav { justify-content: space-between; }
 .st-key-fb_arc_nav > div:nth-child(2) { flex: 1 1 auto !important; }
 .pk-fb-arc-now { text-align: center; font-weight: 900; font-size: 1.05rem; color: #E0457F; }
@@ -1183,7 +1183,8 @@ def line_link(text: str) -> str:
 
 
 NAV_ITEMS = [("schedule", "🏓", "参加する"), ("calendar", "📅", "カレンダー"), ("voice", "😆", "感想"),
-             ("news", "📣", "お知らせ"), ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE")]
+             ("news", "📣", "お知らせ"), ("gallery", "📸", "ギャラリー"), ("access", "📍", "場所"), ("line", "💬", "LINE"),
+             ("contact", "📮", "問い合わせ")]
 
 
 def render_nav(data: dict, me: dict | None = None) -> None:
@@ -1443,7 +1444,7 @@ def render_contact(data: dict, me: dict | None) -> None:
     タイトルと入力欄はいつも見せて、説明やこれまでのやりとりは「詳しく」で開く。
     書いて送るだけ。主催者のメールアドレスなどは相手に表示されない。"""
     with st.container(key="contact"):
-        md('<div class="pk-contact-title">📮 主催者へのお問い合わせ</div>')
+        md('<div class="pk-contact-title" id="sec-contact">📮 主催者へのお問い合わせ</div>')
         if done := st.session_state.pop("contact_done", None):
             st.success(done)
         with st.form("contact_form", clear_on_submit=True, border=False):
@@ -3179,10 +3180,10 @@ def render_page(data: dict) -> None:
     render_inquiry_alert(data, me)
     render_replies(data, me)
     render_line()
-    render_contact(data, me)
     render_news(data)
     live_section(me)
     render_access(data)
+    render_contact(data, me)
     render_gallery(data)
     render_admin(data, me)
 
