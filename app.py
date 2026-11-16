@@ -25,7 +25,7 @@ import uuid
 from email.message import EmailMessage
 from email.utils import formataddr
 from urllib.parse import quote
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import gspread
@@ -54,6 +54,8 @@ SHEETS = {
     "settings": ["id", "value"],  # id = 設定名（howto_title など）
     # アプリの「お問い合わせ」から届いた声。done = 対応済みなら "1"
     # reply = 主催者からの返信、seen = 本人が返信を見たら "1"
+    # 練習会の感想。kind = "stamp"（value はスタンプの種類・1人1つ）か "comment"（value はひとこと）
+    "feedback": ["id", "event_id", "member_id", "kind", "value", "created_at"],
     "inquiries": ["id", "created_at", "member_id", "name", "body", "done", "reply", "replied_at", "seen"],
     # アップロードした写真。1枚＝1行で、JPEG を base64 にして d1〜d20 のマスに分けて入れる
     # （1マス5万字までのため）。重いので、ふだんの一括読み込みには含めない
@@ -727,6 +729,23 @@ a.pk-map-btn {
 }
 .st-key-contact button[kind="primaryFormSubmit"]:hover { background: #C4000F !important; border-color: #C4000F !important; }
 .st-key-contact summary { padding: 2px 0 !important; font-size: .85rem; color: #666; }
+
+/* ---- 練習会の感想 ---- */
+[class*="st-key-fbcard_"] {
+  background: #fff; border: 3px solid var(--ink); border-radius: 22px; padding: 14px 14px 6px;
+  box-shadow: 5px 7px 0 0 var(--brand), 5px 7px 0 3px var(--ink); margin: 0 8px 22px 0;
+}
+[class*="st-key-fbrow_"] > div { flex: 1 1 0 !important; min-width: 0 !important; }
+[class*="st-key-fb_st_"] button { white-space: pre-line !important; line-height: 1.25 !important; padding: 6px 2px !important;
+  border-radius: 14px !important; font-weight: 800 !important; font-size: .78rem !important; min-height: 58px;
+  border: 2px solid var(--ink) !important; background: #fff !important; color: var(--ink) !important; }
+[class*="st-key-fb_st_"] button[kind="primary"] { background: var(--brand) !important; }
+[class*="st-key-fb_st_"] button p { white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+  word-break: keep-all; font-size: .78rem !important; }
+[class*="st-key-fb_del_"] { margin-top: -10px; }
+[class*="st-key-fb_del_"] button { border: none !important; background: transparent !important; padding: 0 4px !important;
+  min-height: 0 !important; color: #999 !important; font-size: .75rem !important; }
+.pk-fb { background: #F3F3EF; border-radius: 12px; padding: 6px 12px; font-weight: 700; line-height: 1.5; margin-bottom: 6px; }
 
 /* ---- 管理者向け：未対応のお問い合わせ ---- */
 .st-key-inq_alert { border-color: #E60012 !important; box-shadow: 5px 7px 0 0 #E60012, 5px 7px 0 3px var(--ink) !important; }
@@ -1478,6 +1497,78 @@ def render_events(data: dict, me: dict | None) -> None:
         with st.expander(f"🔒 終了した練習会（{len(past)}件・管理者のみ表示）", key="past_events"):
             for ev in reversed(past[-10:]):
                 render_event(data, ev, me, past=True)
+
+
+# ---------------------------------------------------------------------------
+# 練習会の感想（スタンプ＋ひとこと）
+# ---------------------------------------------------------------------------
+
+FEEDBACK_STAMPS = [("fun", "😆", "楽しい"), ("sweat", "💪", "いい汗"), ("up", "🏓", "上達"), ("tired", "😅", "疲れた")]
+FEEDBACK_DAYS = 30      # 終わってから何日間、感想の欄を出すか
+FEEDBACK_EVENTS = 3     # 一度に出す練習会の数（新しい順）
+FEEDBACK_MAX = 100      # ひとことの最大文字数
+
+
+def render_feedback(data: dict, me: dict | None) -> None:
+    """終わった練習会の感想。スタンプを押すか、ひとこと書くだけ。みんなに見える。"""
+    since = (date.fromisoformat(today()) - timedelta(days=FEEDBACK_DAYS)).isoformat()
+    recent = [e for e in data["events"] if since <= e["date"] < today()][-FEEDBACK_EVENTS:][::-1]
+    if not recent:
+        return
+    md('<div class="pk-h">VOICE</div>')
+    feedback_card(data, recent[0], me)
+    if len(recent) > 1:
+        with st.expander("前の練習会の感想", key="fb_more"):
+            for ev in recent[1:]:
+                feedback_card(data, ev, me)
+
+
+def feedback_card(data: dict, ev: dict, me: dict | None) -> None:
+    rows = [f for f in data["feedback"] if f["event_id"] == ev["id"]]
+    members = {m["id"]: m for m in data["members"]}
+    is_admin = bool(me and me["id"] in admin_member_ids(data)) or st.session_state.get("is_admin")
+    d = date.fromisoformat(ev["date"])
+    eid = ev["id"]
+    with st.container(key=f"fbcard_{eid}"):
+        md(f'<div class="pk-howto-title">💬 {d.month}/{d.day}（{WEEKDAYS[d.weekday()][0]}）{esc(ev["title"])} の感想</div>')
+        stamps = [f for f in rows if f["kind"] == "stamp"]
+        mine = next((f for f in stamps if me and f["member_id"] == me["id"]), None)
+        row = st.container(horizontal=True, gap="small", wrap=False, key=f"fbrow_{eid}")  # スマホでも横に並べる
+        for code, emoji, label in FEEDBACK_STAMPS:
+            col = row
+            n = sum(f["value"] == code for f in stamps)
+            chosen = bool(mine and mine["value"] == code)
+            if col.button(f"{emoji} {label}{f' {n}' if n else ''}", key=f"fb_st_{eid}_{code}", width="stretch",
+                          type="primary" if chosen else "secondary", disabled=me is None):
+                if chosen:  # もう一度押すと取り消し
+                    _delete("feedback", {mine["id"]})
+                elif mine:
+                    _update("feedback", mine["id"], {"value": code, "created_at": now().isoformat(timespec="seconds")})
+                else:
+                    _append("feedback", {"id": new_id(), "event_id": eid, "member_id": me["id"], "kind": "stamp",
+                                         "value": code, "created_at": now().isoformat(timespec="seconds")})
+                st.rerun()
+        comments = sorted((f for f in rows if f["kind"] == "comment"), key=lambda f: f["created_at"])
+        for f in comments:
+            m = members.get(f["member_id"])
+            name = m["name"] if m else "（退会した方）"
+            md(f"<div class='pk-fb'><b>{esc(name)}</b>　{esc(f['value'])}</div>")
+            if (me and f["member_id"] == me["id"]) or is_admin:
+                if st.button("🗑 消す", key=f"fb_del_{f['id']}", help="この感想を消す"):
+                    _delete("feedback", {f["id"]})
+                    st.rerun()
+        if me is None:
+            st.caption("ログインすると、スタンプを押したり、ひとこと感想を書いたりできます。")
+            return
+        with st.form(f"fb_form_{eid}", clear_on_submit=True, border=False):
+            c1, c2 = st.columns([4, 1], vertical_alignment="bottom")
+            text = c1.text_input("ひとこと感想", max_chars=FEEDBACK_MAX, label_visibility="collapsed",
+                                 placeholder="ひとこと感想（例：ディンクが続いた🔥）")
+            sent = c2.form_submit_button("送る", width="stretch")
+        if sent and text.strip():
+            _append("feedback", {"id": new_id(), "event_id": eid, "member_id": me["id"], "kind": "comment",
+                                 "value": text.strip(), "created_at": now().isoformat(timespec="seconds")})
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -2845,6 +2936,7 @@ def render_page(data: dict) -> None:
     render_news(data)
     render_calendar(data)
     render_events(data, me)
+    render_feedback(data, me)
     render_access(data)
     render_gallery(data)
     render_admin(data, me)
