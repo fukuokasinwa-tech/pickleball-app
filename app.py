@@ -338,8 +338,19 @@ def play_count(data: dict, member_id: str) -> int:
     return sum(d < today() for d in attended_dates(data, member_id))
 
 
+EXPERIENCED_KEY = "experienced_ids"
+
+
+def experienced_ids(data: dict) -> set[str]:
+    """管理者が「参加経験あり」にした人（アプリを使う前に参加していた人など）。settings に「,」区切りで保存。"""
+    row = find(data["settings"], EXPERIENCED_KEY)
+    return {x for x in (row["value"] if row else "").split(",") if x}
+
+
 def is_first_time(data: dict, member_id: str, event: dict) -> bool:
-    """この日より前の練習会に参加していなければ初参加。"""
+    """この日より前の練習会に参加していなければ初参加（「参加経験あり」にした人は初参加にしない）。"""
+    if member_id in experienced_ids(data):
+        return False
     return not any(d < event["date"] for d in attended_dates(data, member_id))
 
 
@@ -3095,6 +3106,18 @@ def admin_members(data: dict) -> None:
         c1.write(f"{crown}{m['name']}{fam}　参加{play_count(data, m['id'])}回{pin_note}")
         if joined := joined_label(m.get("created_at", "")):
             c1.caption(f"📅 {joined}")
+        # アプリの記録では初めてでも、実際は前に参加したことがある人は「参加経験あり」にして 🔰初 マークを消す
+        exp = experienced_ids(data)
+        if m["id"] in exp:
+            if c1.button("🔰 初参加マークを戻す", key=f"adm_exp_{m['id']}", help="初参加として扱うように戻す"):
+                save_setting(data, EXPERIENCED_KEY, ",".join(sorted(exp - {m["id"]})))
+                st.session_state["flash"] = f"{m['name']} さんを初参加の扱いに戻しました。"
+                st.rerun()
+        elif c1.button("✔ 参加経験あり（初参加マークを消す）", key=f"adm_exp_{m['id']}",
+                       help="前に参加したことがある人の「初」マークを消し、参加費も2回目以降の金額で計算します"):
+            save_setting(data, EXPERIENCED_KEY, ",".join(sorted(exp | {m["id"]})))
+            st.session_state["flash"] = f"{m['name']} さんの初参加マークを消しました。"
+            st.rerun()
         if not m["family_of"]:  # 家族は自分でログインしないので管理者にはできない
             if m["id"] in admins:
                 if c4.button("管理者を外す", key=f"adm_role_{m['id']}", width="stretch"):
