@@ -1223,7 +1223,7 @@ def render_nav(data: dict, me: dict | None = None) -> None:
     """トップのすぐ下に、各コーナーへ飛べるボタンを並べる（押すとその場所までスクロール）。
     お知らせ・ギャラリー・場所は、中身があるときだけ出す。
     ログイン後は「📖 使い方」も出す（押すとすぐ下に使い方が開く。CSS の :target で表示を切り替える）。"""
-    shown = {"news": bool(data["news"]), "voice": any(e["date"] < today() for e in data["events"]),
+    shown = {"news": bool(data["news"]), "voice": any(is_done(e) for e in data["events"]),
              "gallery": any(gallery_status(g) == "on" for g in data["gallery"]),
              "access": any(setting(data, k).strip() for k in list(ACCESS_DEFAULT)[:2])}
     links = "".join(f'<a class="pk-nav-i" href="#sec-{k}"><span>{i}</span>{t}</a>'
@@ -1631,6 +1631,17 @@ def render_buttons(data: dict, ev: dict, person: dict | None, show_name: bool, f
     st.rerun()
 
 
+def is_done(ev: dict) -> bool:
+    """練習会が終わったか。前の日以前は終了。今日の分は、終わりの時刻（例「18:00〜20:00」の20:00）を過ぎたら終了。"""
+    t = today()
+    if ev["date"] != t:
+        return ev["date"] < t
+    m = re.search(r"\d{1,2}:\d{2}\D+(\d{1,2}):(\d{2})", ev.get("time") or "")
+    if not m:
+        return False
+    return now().strftime("%H:%M") >= f"{int(m[1]):02d}:{m[2]}"
+
+
 def start_time(text: str) -> str:
     """「09:00〜11:00」→「9:00」。読み取れなければ空。"""
     m = re.match(r"\s*(\d{1,2}):(\d{2})", text or "")
@@ -1693,10 +1704,10 @@ def render_calendar(data: dict, me: dict | None = None) -> None:
 
     # カレンダーの下に、その月の練習会を一覧で
     # カレンダーの下の一覧は、これからの練習会だけ（終わった練習会の感想は「VOICE」に別で出す）
-    if not [e for e in month_events if e["date"] >= t]:
+    if not [e for e in month_events if not is_done(e)]:
         md('<div class="ev-empty">この月のこれからの練習会はありません。</div>')
     for e in month_events:
-        if e["date"] < t:
+        if is_done(e):
             continue
         d = date.fromisoformat(e["date"])
         n = len(event_rows(data, e["id"], "attending"))
@@ -1714,8 +1725,8 @@ def render_calendar(data: dict, me: dict | None = None) -> None:
 
 
 def render_events(data: dict, me: dict | None) -> None:
-    upcoming = [e for e in data["events"] if e["date"] >= today()]
-    past = [e for e in data["events"] if e["date"] < today()]
+    upcoming = [e for e in data["events"] if not is_done(e)]
+    past = [e for e in data["events"] if is_done(e)]
     md('<div class="pk-h" id="sec-schedule">SCHEDULE</div>')
     if not upcoming:
         md('<div class="ev-empty">次の練習会はまだ決まっていません。お楽しみに！</div>')
@@ -1740,7 +1751,7 @@ FEEDBACK_RECENT = 2     # 感想カードを出す、終わった練習会の数
 
 def render_feedback(data: dict, me: dict | None) -> None:
     """練習会の感想（直近2回・新しい順）。予定表とは別の場所に出す。"""
-    done = [e for e in data["events"] if e["date"] < today()][::-1]  # 新しい順
+    done = [e for e in data["events"] if is_done(e)][::-1]  # 新しい順（今日の分は終わりの時刻を過ぎたら入る）
     recent, older = done[:FEEDBACK_RECENT], done[FEEDBACK_RECENT:]
     if not recent:
         return
@@ -3196,7 +3207,7 @@ def render_page(data: dict) -> None:
     remember_login(me)
     pull_to_refresh()
     render_hero(data, me)
-    if any(e["date"] < today() for e in data["events"]):  # 感想の欄へ飛ぶ目立つボタン
+    if any(is_done(e) for e in data["events"]):  # 感想の欄へ飛ぶ目立つボタン
         md('<a class="pk-voice-jump" href="#sec-voice">🎉 参加した感想をぜひ教えてください <span>▼</span></a>')
     if not me:  # 使い方は、はじめて名前を登録する人（ログイン前）にだけ見せる
         render_howto(data)
