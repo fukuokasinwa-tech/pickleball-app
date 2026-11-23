@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YAME PICK パドル診断</title>
+<meta name="description" content="9つの質問に答えるだけで、あなたに合うピックルボールのパドルのタイプがわかります。八女でピックルボールを楽しもう！">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="YAME PICK">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:title" content="YAME PICK パドル診断">
+<meta property="og:description" content="9つの質問に答えるだけで、あなたに合うパドルのタイプがわかります。">
+<meta property="og:url" content="https://fukuokasinwa-tech.github.io/pickleball-app/paddle/">
+<meta property="og:image" content="https://fukuokasinwa-tech.github.io/pickleball-app/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="../logo.png">
+<link rel="apple-touch-icon" href="../logo.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap">
+<style>
+  :root { --ink:#17181a; --muted:#666a70; --green:#FE971A; --lime:#c6e93a; --yellow:#ffd84d; --bg:#faf7f2; --card:#ffffff; --line:#dbe8df; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Zen Maru Gothic","Hiragino Maru Gothic ProN","Noto Sans JP",sans-serif; line-height:1.7; }
+  .wrap { max-width:560px; margin:0 auto; padding:18px 16px 40px; }
+  header.hero { background:radial-gradient(circle at 80% 10%, rgba(254,151,26,.45), transparent 60%), #111; color:#fff; border-radius:24px; padding:22px 20px 20px; position:relative; overflow:hidden; box-shadow:0 10px 26px rgba(0,0,0,.25); }
+  header.hero .brand { font-weight:900; letter-spacing:.08em; font-size:13px; opacity:.95; }
+  header.hero h1 span { color:#FE971A; }
+  header.hero h1 { margin:4px 0 6px; font-size:28px; font-weight:900; line-height:1.25; }
+  header.hero p { margin:0; font-size:14px; opacity:.95; }
+  .ball { position:absolute; right:-18px; top:-18px; width:110px; height:110px; border-radius:50%; background:var(--yellow); opacity:.9;
+          background-image:radial-gradient(circle at 30% 30%, rgba(0,0,0,.12) 6px, transparent 7px), radial-gradient(circle at 65% 40%, rgba(0,0,0,.12) 6px, transparent 7px), radial-gradient(circle at 45% 70%, rgba(0,0,0,.12) 6px, transparent 7px), radial-gradient(circle at 75% 75%, rgba(0,0,0,.12) 6px, transparent 7px); }
+  .card { background:var(--card); border-radius:20px; padding:18px; margin-top:16px; box-shadow:0 4px 16px rgba(23,51,42,.07); }
+  .start p { margin:0 0 10px; }
+  .btn { display:block; width:100%; border:none; border-radius:999px; padding:14px 18px; font:inherit; font-weight:900; font-size:17px; cursor:pointer; }
+  .btn.main { background:var(--green); color:#111; box-shadow:0 6px 14px rgba(254,151,26,.35); }
+  .btn.sub { background:#f1f1f1; color:var(--ink); margin-top:10px; font-size:15px; }
+  .progress { height:8px; background:#e3eee6; border-radius:9px; overflow:hidden; margin:4px 0 14px; }
+  .progress i { display:block; height:100%; background:linear-gradient(90deg,var(--green),var(--lime)); width:0; transition:width .3s; }
+  .qno { font-size:13px; color:var(--muted); font-weight:700; }
+  .qtext { font-size:20px; font-weight:900; margin:2px 0 4px; line-height:1.45; }
+  .qhint { font-size:13px; color:var(--muted); margin:0 0 12px; }
+  .opt { display:block; width:100%; text-align:left; border:2px solid var(--line); background:#fff; border-radius:16px; padding:13px 14px; margin:8px 0; font:inherit; font-size:16px; font-weight:700; color:var(--ink); cursor:pointer; transition:border-color .15s, background .15s; }
+  .opt:hover, .opt:focus { border-color:var(--green); background:#fff6ea; outline:none; }
+  .opt small { display:block; font-weight:500; color:var(--muted); font-size:13px; }
+  .back { background:none; border:none; color:var(--muted); font:inherit; font-size:14px; margin-top:6px; cursor:pointer; padding:6px 0; }
+  .result h2 { margin:0; font-size:15px; color:var(--muted); font-weight:700; }
+  .type { font-size:26px; font-weight:900; margin:2px 0 6px; line-height:1.3; }
+  .type span { background:linear-gradient(transparent 62%, var(--yellow) 62%); }
+  .lead { margin:0 0 12px; }
+  .specs { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
+  .spec { background:#fff6ea; border-radius:14px; padding:10px 12px; }
+  .spec b { display:block; font-size:12px; color:var(--muted); font-weight:700; }
+  .spec div { font-weight:900; font-size:16px; line-height:1.4; }
+  .spec small { display:block; color:var(--muted); font-size:12px; line-height:1.5; margin-top:2px; }
+  .meter { margin:14px 0 6px; }
+  .meter .lbl { display:flex; justify-content:space-between; font-size:13px; font-weight:700; color:var(--muted); }
+  .meter .bar { height:12px; border-radius:9px; background:linear-gradient(90deg,#7fc8a9,#e9e9e9 50%,#f2a65a); position:relative; margin-top:4px; }
+  .meter .dot { position:absolute; top:50%; width:22px; height:22px; border-radius:50%; background:#fff; border:4px solid var(--ink); transform:translate(-50%,-50%); transition:left .5s; }
+  .tips { margin:12px 0 0; padding-left:20px; }
+  .tips li { margin:4px 0; }
+  .note { background:#fff8db; border-radius:14px; padding:12px 14px; font-size:14px; margin-top:12px; }
+  .care { background:#fdecea; border-radius:14px; padding:12px 14px; font-size:14px; margin-top:12px; }
+  h3 { font-size:16px; margin:16px 0 4px; }
+  .glossary dt { font-weight:900; margin-top:8px; }
+  .glossary dd { margin:0; color:var(--muted); font-size:14px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; margin-top:22px; }
+  .copied { text-align:center; color:#b35f00; font-weight:700; font-size:14px; min-height:1.5em; margin-top:6px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="ball" aria-hidden="true"></div>
+    <img src="../logo.png" alt="" style="width:64px;height:64px;transform:rotate(-8deg);position:relative">
+    <div class="brand">YAME <span style="color:#FE971A">PICK</span></div>
+    <h1><span>パドル</span>診断</h1>
+    <p>9つの質問に答えるだけで、あなたに合うパドルの「タイプ」がわかります。</p>
+  </header>
+
+  <!-- はじめ -->
+  <section class="card start" id="start">
+    <p>はじめてのパドル選びや、買いかえのときの参考にどうぞ。</p>
+    <p style="color:var(--muted);font-size:14px">答えはこの画面の中だけで使います。お名前などは聞きません。かかる時間は1分ほどです。</p>
+    <button class="btn main" id="go">診断をはじめる</button>
+  </section>
+
+  <!-- 質問 -->
+  <section class="card hidden" id="quiz" aria-live="polite">
+    <div class="progress"><i id="bar"></i></div>
+    <div class="qno" id="qno"></div>
+    <div class="qtext" id="qtext"></div>
+    <p class="qhint" id="qhint"></p>
+    <div id="opts"></div>
+    <button class="back" id="back">← ひとつ前にもどる</button>
+  </section>
+
+  <!-- 結果 -->
+  <section class="card result hidden" id="result"></section>
+
+  <section class="card hidden" id="words">
+    <h3 style="margin-top:0">パドルのことば</h3>
+    <dl class="glossary">
+      <dt>重さ</dt><dd>軽いほど速く振れてネット前で動かしやすく、重いほど強いボールを打ちやすくなります。</dd>
+      <dt>しん（芯）の厚さ</dt><dd>厚い（16mmくらい）ほどボールをやわらかく受け止めてコントロールしやすく、うすい（13〜14mmくらい）ほどボールが速く飛びます。</dd>
+      <dt>形</dt><dd>スタンダード（幅広）はボールが当たりやすい場所が広く、ロング（細長い）は遠くまで届いてパワーや回転をかけやすくなります。ハイブリッドはそのあいだです。</dd>
+      <dt>面の素材</dt><dd>カーボンはコントロールと回転、ガラス繊維（ファイバーグラス）は球のいきおいが出やすいといわれます。</dd>
+      <dt>グリップの太さ</dt><dd>太すぎると手首が動かしにくく、腕に負担がかかることも。迷ったら細めを選び、グリップテープで太くできます。</dd>
+    </dl>
+  </section>
+
+  <footer><a href="../" style="color:inherit">YAME PICK（八女のピックルボール）</a><br>※ 診断は、一般的なパドルの選び方をもとにした目安です。</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  // 質問：each option has points. c=コントロール寄り, p=パワー寄り, w=重さ(-軽 +重), r=リーチ(形を細長く)
+  var Q = [
+    { id: "exp", q: "ピックルボールの経験は？", opts: [
+      { t: "はじめて・これから始める", v: { c: 2, beginner: 1 } },
+      { t: "半年くらいまで", v: { c: 1, beginner: 1 } },
+      { t: "半年〜2年くらい", v: {} },
+      { t: "2年以上・大会にも出る", v: { adv: 1 } } ] },
+    { id: "sport", q: "ほかに経験のあるラケット競技は？", hint: "いちばん長くやっていたものを選んでください。", opts: [
+      { t: "テニス", s: "長めのグリップ・細長い形がなじみやすい", v: { r: 1, tennis: 1 } },
+      { t: "卓球・バドミントン", s: "手首を使って速く振るのが得意", v: { w: -1, quick: 1 } },
+      { t: "ソフトテニス・その他", v: {} },
+      { t: "とくにない", v: { c: 1 } } ] },
+    { id: "style", q: "やってみたい・好きなプレーは？", opts: [
+      { t: "ネット前でやさしくつなぐ", s: "ディンク・ていねいな返球", v: { c: 2 } },
+      { t: "強いボールで決める", s: "ドライブ・スマッシュ", v: { p: 2 } },
+      { t: "どちらもバランスよく", v: { c: 1, p: 1 } } ] },
+    { id: "game", q: "よくするのは？", opts: [
+      { t: "ダブルス（4人）", v: { c: 1 } },
+      { t: "シングルス（2人）", v: { p: 1, r: 1, w: 1 } },
+      { t: "どちらも・まだわからない", v: {} } ] },
+    { id: "body", q: "ひじ・手首・肩に、痛みや不安はありますか？", hint: "テニスひじなど。", opts: [
+      { t: "ある・気になる", v: { care: 1 } },
+      { t: "とくにない", v: {} } ] },
+    { id: "power", q: "腕の力・体力に自信は？", opts: [
+      { t: "あまりない", v: { w: -1, c: 1 } },
+      { t: "ふつう", v: {} },
+      { t: "ある", v: { w: 1, p: 1 } } ] },
+    { id: "hand", q: "手の大きさは？", hint: "手袋のサイズや、まわりの人とくらべた感じで。", opts: [
+      { t: "小さめ（手袋 S くらい）", v: { grip: "S" } },
+      { t: "ふつう（手袋 M くらい）", v: { grip: "M" } },
+      { t: "大きめ（手袋 L 以上）", v: { grip: "L" } } ] },
+    { id: "twohand", q: "バックハンドを両手で打ちたいですか？", opts: [
+      { t: "はい・両手で打つ", v: { longHandle: 1 } },
+      { t: "いいえ・片手で打つ", v: {} },
+      { t: "まだわからない", v: {} } ] },
+    { id: "budget", q: "パドルにかけたい金額は？", hint: "高いパドルでなくても、はじめは十分楽しめます。", opts: [
+      { t: "なるべく安く", v: { budget: "low" } },
+      { t: "ふつうくらい", v: { budget: "mid" } },
+      { t: "いいものがほしい", v: { budget: "high" } } ] }
+  ];
+
+  var answers = [], i = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; }); }
+
+  function show(id) { ["start", "quiz", "result", "words"].forEach(function (x) { $(x).classList.toggle("hidden", x !== id && !(id === "result" && x === "words")); }); window.scrollTo({ top: 0, behavior: "smooth" }); }
+
+  function render() {
+    var q = Q[i];
+    $("bar").style.width = (i / Q.length * 100) + "%";
+    $("qno").textContent = "質問 " + (i + 1) + " / " + Q.length;
+    $("qtext").textContent = q.q;
+    $("qhint").textContent = q.hint || "";
+    $("qhint").style.display = q.hint ? "" : "none";
+    $("opts").innerHTML = q.opts.map(function (o, k) {
+      return '<button class="opt" data-k="' + k + '">' + esc(o.t) + (o.s ? "<small>" + esc(o.s) + "</small>" : "") + "</button>";
+    }).join("");
+    $("opts").querySelectorAll(".opt").forEach(function (b) { b.onclick = function () { answers[i] = +b.dataset.k; next(); }; });
+    $("back").style.visibility = i ? "visible" : "hidden";
+  }
+  function next() { if (i < Q.length - 1) { i++; render(); } else { $("bar").style.width = "100%"; result(); } }
+
+  function result() {
+    var t = { c: 0, p: 0, w: 0, r: 0 };
+    answers.forEach(function (k, qi) { var v = Q[qi].opts[k].v; for (var key in v) t[key] = (typeof v[key] === "number" ? (t[key] || 0) + v[key] : v[key]); });
+    var bal = t.p - t.c; // マイナス＝コントロール寄り、プラス＝パワー寄り
+    var kind = bal <= -2 ? "control" : bal >= 2 ? "power" : "balance";
+
+    // 重さ
+    var w = t.w + (kind === "power" ? 1 : 0) - (t.beginner ? 1 : 0);
+    var weight;
+    if (t.care) weight = { n: "ふつう（中くらい）", s: "約 205〜230g。軽すぎると腕にひびきやすいので、中くらいが安心です。" };
+    else if (w <= -1) weight = { n: "軽め", s: "約 205g まで。速く振れて、ネット前でも動かしやすい。" };
+    else if (w >= 2) weight = { n: "重め", s: "約 230g 以上。強いボールを打ち返しやすい。" };
+    else weight = { n: "ふつう（中くらい）", s: "約 205〜230g。はじめての方にも多くすすめられる重さです。" };
+
+    // しんの厚さ
+    var core = (kind === "control" || t.care || t.beginner)
+      ? { n: "厚め（16mm くらい）", s: "ボールをやわらかく受け止め、コントロールしやすい。" }
+      : kind === "power" ? { n: "うすめ（13〜14mm くらい）", s: "ボールが速く飛び、強く打ちやすい。" }
+      : { n: "中くらい〜厚め（14〜16mm）", s: "コントロールとパワーのバランス型。" };
+
+    // 形
+    var r = t.r + (kind === "power" ? 1 : 0) - (t.beginner ? 1 : 0);
+    var shape = r >= 2 ? { n: "ロング（細長い）", s: "遠くまで届き、パワーや回転をかけやすい。" }
+      : r >= 1 ? { n: "ハイブリッド", s: "スタンダードとロングのあいだ。どちらのよさも。" }
+      : { n: "スタンダード（幅広）", s: "ボールが当たりやすい場所が広く、ミスが少ない。" };
+
+    // 面
+    var face = kind === "power" ? { n: "ガラス繊維（ファイバーグラス）など", s: "ボールにいきおいが出やすい。" }
+      : { n: "カーボン", s: "コントロールしやすく、回転もかけやすい。" };
+
+    // グリップ
+    var gm = { S: { n: "細め", s: "外まわり 約10cm（4インチ）くらい" }, M: { n: "ふつう", s: "外まわり 約10.5〜10.8cm くらい" }, L: { n: "太め", s: "外まわり 約11cm 以上" } };
+    var grip = gm[t.grip || "M"];
+
+    var titles = {
+      control: { t: "コントロール型", d: "ていねいに、ねらったところへ返すのが得意になるタイプ。ネット前のやりとり（ディンク）で強さを発揮します。" },
+      balance: { t: "バランス型", d: "守りも攻めもこなせる、いちばん万能なタイプ。いろいろなプレーを楽しみたい方に。" },
+      power: { t: "パワー型", d: "強いボールで相手を押しこむのが得意になるタイプ。打ちこんで決めたい方に。" }
+    };
+    var T = titles[kind];
+    var pos = Math.max(6, Math.min(94, 50 + bal * 11));
+
+    var tips = [];
+    if (t.beginner) tips.push("はじめての1本は、高いパドルでなくて大丈夫。まずは「ボールが当たりやすい・ふつうの重さ」を選ぶと上達が早くなります。");
+    if (t.longHandle) tips.push("両手でバックハンドを打つなら、グリップ（持つところ）が長めのものを選びましょう。");
+    if (t.tennis && !t.longHandle) tips.push("テニス経験のある方は、グリップが長めのものや細長い形が手になじみやすいです。");
+    if (t.quick) tips.push("卓球・バドミントン経験のある方は、軽めで手元の操作がしやすいものが合いやすいです。");
+    tips.push("グリップの太さで迷ったら細めを。グリップテープを巻けば、あとから太くできます。");
+    if (t.adv || t.budget === "high") tips.push("公式の大会に出る方は、USA Pickleball の承認（認定）を受けたパドルか確かめてから買いましょう。");
+    if (t.budget === "low") tips.push("安いパドルでも、重さ・形・グリップの太さが合っていれば十分楽しめます。");
+
+    var html = '<h2>あなたに合うのは…</h2>'
+      + '<div class="type"><span>' + esc(T.t) + '</span>のパドル</div>'
+      + '<p class="lead">' + esc(T.d) + '</p>'
+      + '<div class="meter"><div class="lbl"><span>コントロール</span><span>パワー</span></div><div class="bar"><span class="dot" style="left:' + pos + '%"></span></div></div>'
+      + '<div class="specs">'
+      + spec("重さ", weight) + spec("しん（芯）の厚さ", core) + spec("形", shape) + spec("面の素材", face) + spec("グリップの太さ", grip)
+      + spec("持つところの長さ", t.longHandle ? { n: "長め", s: "両手のバックハンドに" } : { n: "ふつう", s: "片手で打つならふつうで十分" })
+      + '</div>'
+      + (t.care ? '<div class="care">💡 ひじ・手首・肩が気になる方は、<b>軽すぎない中くらいの重さ</b>と<b>厚め（16mm くらい）のしん</b>のものが、ボールが当たったときのひびきをやわらげやすいです。痛みがあるときは無理をせず、お医者さんにも相談してください。</div>' : '')
+      + '<h3>選ぶときのポイント</h3><ul class="tips">' + tips.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + '</ul>'
+      + '<div class="note">🏓 買う前に、実際に持って振ってみるのがいちばんです。YAME PICK の練習会では<b>パドルの無料貸し出し</b>があります。いろいろな重さや形を試してから選ぶのもおすすめです。<br><a href="../" style="color:#b35f00;font-weight:900">→ 練習会の日程・参加確認はこちら</a></div>'
+      + '<button class="btn main" id="copy" style="margin-top:16px">結果をコピーする</button>'
+      + '<div class="copied" id="copied"></div>'
+      + '<button class="btn sub" id="again">もう一度診断する</button>';
+    $("result").innerHTML = html;
+    show("result");
+
+    var text = "【YAME PICK パドル診断】" + T.t + "のパドル\n重さ：" + weight.n + "\nしんの厚さ：" + core.n + "\n形：" + shape.n + "\n面：" + face.n + "\nグリップ：" + grip.n + (t.longHandle ? "\n持つところ：長め" : "");
+    $("copy").onclick = function () {
+      var done = function () { $("copied").textContent = "コピーしました。LINE などに貼れます。"; };
+      try { navigator.clipboard.writeText(text).then(done, function () { $("copied").textContent = "コピーできませんでした。画面を写真に撮っておいてください。"; }); }
+      catch (e) { $("copied").textContent = "コピーできませんでした。画面を写真に撮っておいてください。"; }
+    };
+    $("again").onclick = function () { answers = []; i = 0; show("quiz"); render(); };
+  }
+  function spec(label, o) { return '<div class="spec"><b>' + esc(label) + '</b><div>' + esc(o.n) + '</div>' + (o.s ? '<small>' + esc(o.s) + '</small>' : '') + '</div>'; }
+
+  $("go").onclick = function () { answers = []; i = 0; show("quiz"); render(); };
+  $("back").onclick = function () { if (i > 0) { i--; render(); } };
+})();
+</script>
+</body>
+</html>
