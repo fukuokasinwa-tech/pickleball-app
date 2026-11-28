@@ -601,6 +601,10 @@ a.pk-nav-i span { font-size: 1.05rem; }
 .pk-howto-pop:target { display: block; }
 a.pk-howto-close { display: block; text-align: center; margin-top: 10px; padding: 8px; border-radius: 999px;
   border: 2px solid var(--ink); color: var(--ink) !important; font-weight: 900; text-decoration: none !important; }
+button.pk-save { width: 100%; padding: 12px; border-radius: 999px; border: 2.5px solid var(--ink); background: var(--brand);
+  color: var(--ink); font-weight: 900; font-size: 1rem; box-shadow: 3px 4px 0 var(--ink); cursor: pointer; font-family: inherit; }
+button.pk-save:active { transform: translate(2px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.pk-save-st { font-size: .85rem; color: #555; margin-top: 4px; font-weight: 700; }
 .pk-join-tip { background: #FFF1DE; border: 2px dashed var(--brand); border-radius: 14px; padding: 8px 12px;
   font-size: .88rem; font-weight: 700; line-height: 1.6; margin: -4px 8px 16px 0; }
 .pk-join-tip b { font-weight: 900; }
@@ -2375,11 +2379,46 @@ def post_jpg(kind: str, ym: str, events_json: str, size: str) -> bytes:
     return post_images.status_image(m, events, size)
 
 
+def save_image_button(img: bytes, file_name: str, label: str, key: str) -> None:
+    """画像を「写真」に保存するボタン。スマホでは共有メニュー（画像を保存）を開くので、アプリの画面から離れない。
+    共有メニューが使えないパソコンなどでは、ふつうのダウンロードにする（どちらも画面は今のまま）。"""
+    b64 = base64.b64encode(img).decode()
+    st.html(f"""<button type="button" class="pk-save" id="pk-save-{key}">📲 {esc(label)}</button>
+<div class="pk-save-st" id="pk-save-st-{key}"></div>
+<script>
+(function () {{
+  const btn = document.getElementById('pk-save-{key}');
+  const st = document.getElementById('pk-save-st-{key}');
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = '1';
+  btn.addEventListener('click', async () => {{
+    const bin = atob('{b64}');
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const file = new File([arr], '{file_name}', {{ type: 'image/jpeg' }});
+    try {{
+      if (navigator.canShare && navigator.canShare({{ files: [file] }})) {{
+        await navigator.share({{ files: [file] }});
+        st.textContent = '「画像を保存」を選ぶと写真に保存されます。保存したらこの画面に戻ってきます。';
+        return;
+      }}
+    }} catch (e) {{
+      if (e && e.name === 'AbortError') return;   // 共有メニューを閉じただけ
+    }}
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = '{file_name}';
+    document.body.appendChild(a); a.click(); a.remove();
+    st.textContent = 'ダウンロードしました。';
+  }});
+}})();
+</script>""", unsafe_allow_javascript=True)
+
+
 def admin_post_images(data: dict) -> None:
     st.caption("練習会の日程から、Instagram に投稿する画像と投稿文を作ります。")
     with st.expander("📱 Instagram への投稿のしかた"):
-        md("""1. 「🖼 画像を作る」を押して、出てきた画像を**長押し**して「**"写真"に追加**」を押す<br>
-（または「📥 保存」→ 共有ボタン →「**画像を保存**」）
+        md("""1. 「🖼 画像を作る」を押して、「**📲 写真に保存**」→「**画像を保存**」を押す<br>
+（画像を**長押し**して「**"写真"に追加**」でも保存できます。どちらもアプリの画面はそのまま）
 2. **Instagram アプリ**を開いて、下の「**＋**」→「**投稿**」→ 保存した画像を選ぶ
 3. 下の「③ 投稿文」を📋でコピーして、キャプションに貼り付ける
 
@@ -2405,16 +2444,14 @@ def admin_post_images(data: dict) -> None:
     md("**① 月間スケジュール**")
     img = post_jpg("schedule", ym, json.dumps(events, ensure_ascii=False), size)
     st.image(img, width="stretch")
-    st.download_button("📥 スケジュール画像を保存", img, file_name=f"yamepick_{ym}_schedule_{size}.jpg",
-                       mime="image/jpeg", width="stretch", key="post_dl_schedule")
+    save_image_button(img, f"yamepick_{ym}_schedule_{size}.jpg", "スケジュール画像を写真に保存", "sch")
 
     md("**② 参加状況（参加者募集）**")
     upcoming = [e for e in events if e["date"] >= today()]
     if upcoming:
         img2 = post_jpg("status", ym, json.dumps(upcoming, ensure_ascii=False), size)
         st.image(img2, width="stretch")
-        st.download_button("📥 参加状況の画像を保存", img2, file_name=f"yamepick_{ym}_status_{size}.jpg",
-                           mime="image/jpeg", width="stretch", key="post_dl_status")
+        save_image_button(img2, f"yamepick_{ym}_status_{size}.jpg", "参加状況の画像を写真に保存", "sts")
         st.caption("「募集中」「満員」は、この画像を作った時点のものです。人数と名前は載せていません。")
     else:
         st.caption("この月の練習会はすべて終わっているので、参加状況の画像は作りません。")
@@ -2967,7 +3004,7 @@ def admin_sales(data: dict) -> None:
     xlsx = sales_report.build_xlsx(submit, office, no, rows)
     b3.download_button("📥 Excelで保存", xlsx, width="stretch", key="sl_xlsx",
                        file_name=f"授産売上金提出表_{submit:%Y%m%d}.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", on_click="ignore")
     st.caption("Excel は A4・縦向きで1ページに収まるように設定してあります。開いて「印刷」するだけで使えます。"
                "合計は計算式なので、Excel で金額を直しても自動で変わります。")
 
@@ -2999,11 +3036,11 @@ def admin_flyers() -> None:
                 st.image(flyer_preview(png_path, os.path.getmtime(png_path)), width="stretch")
             with open(pdf_path, "rb") as f:
                 st.download_button("📥 印刷用PDFを保存", f.read(), file_name=name, mime="application/pdf",
-                                   width="stretch", key=f"flyer_pdf_{name}")
+                                   width="stretch", key=f"flyer_pdf_{name}", on_click="ignore")
             if os.path.exists(png_path):
                 with open(png_path, "rb") as f:
                     st.download_button("📥 画像（PNG）を保存", f.read(), file_name=os.path.basename(png_path),
-                                       mime="image/png", width="stretch", key=f"flyer_png_{name}")
+                                       mime="image/png", width="stretch", key=f"flyer_png_{name}", on_click="ignore")
     st.caption("文章やデザインを変えたいときは、Claude に依頼してください（flyer/build_flyer.py で作り直します）。")
 
 
@@ -3165,7 +3202,7 @@ def admin_csv(data: dict) -> None:
                         "○" if a["status"] == "attending" and is_first_time(data, m["id"], e) else "",
                         m["source"], m["referrer"], a["updated_at"]])
     st.download_button("📥 出欠一覧（CSV）", buf.getvalue().encode("utf-8-sig"),
-                       file_name="pikkurume_attendance.csv", mime="text/csv")
+                       file_name="pikkurume_attendance.csv", mime="text/csv", on_click="ignore")
 
 
 # ---------------------------------------------------------------------------
